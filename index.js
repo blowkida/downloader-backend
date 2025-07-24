@@ -1,103 +1,89 @@
-const express = require("express");
-const cors = require("cors");
-const { execFile } = require("child_process");
-const path = require("path");
+import express from "express";
+import cors from "cors";
+import { execFile } from "child_process";
+import path from "path";
+import { fileURLToPath } from "url";
+import util from "util";
 
 const app = express();
+const port = process.env.PORT || 10000;
+const execFilePromise = util.promisify(execFile);
 app.use(cors());
 app.use(express.json());
 
-const YTDLP_PATH = "C:/Tools/yt-dlp/yt-dlp.exe"; // Change this if needed for local dev
-const IS_RENDER = process.env.RENDER === "true";
-const EXEC_PATH = IS_RENDER ? "yt-dlp" : YTDLP_PATH; // Use yt-dlp in Render, full path locally
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const PROXY = "http://us.proxiware.com:8080"; // ✅ You can rotate this
-const FALLBACK_DOMAINS = {
+// Linux-compatible yt-dlp path (assumes it's in PATH or placed correctly)
+const ytdlpPath = "yt-dlp"; // You can also use full path like "/usr/bin/yt-dlp"
+
+const fallbackDomains = {
   "xhamster.com": [
-    "xhamster19.com",
-    "xhmaster.desi",
-    "xhmaster1.desi",
-    "xhaccess.com",
-    "xhmaster2.com",
+    "xhamster.desi", "xhmaster1.desi", "xhaccess.com",
+    "xhamster19.com", "xhmaster2.com"
   ],
 };
 
-function runYtDlp(url) {
-  return new Promise((resolve, reject) => {
-    execFile(
-      EXEC_PATH,
-      [
-        url,
-        "--dump-json",
-        "--no-warnings",
-        "--no-playlist",
-        "--proxy", PROXY, // ✅ added proxy here
-      ],
-      { maxBuffer: 1024 * 500 },
-      (error, stdout, stderr) => {
-        if (error) {
-          console.error("yt-dlp error:", error);
-          return reject(error);
-        }
-        try {
-          const json = JSON.parse(stdout);
-          resolve(json);
-        } catch (err) {
-          reject(err);
-        }
-      }
-    );
-  });
+function replaceDomain(url, newDomain) {
+  try {
+    const u = new URL(url);
+    u.hostname = newDomain;
+    return u.toString();
+  } catch {
+    return url;
+  }
 }
 
 async function fetchVideoInfoWithFallback(originalUrl) {
-  const domain = new URL(originalUrl).hostname;
-  const fallbackUrls = (FALLBACK_DOMAINS[domain] || []).map(fallbackDomain =>
-    originalUrl.replace(domain, fallbackDomain)
-  );
+  const domain = Object.keys(fallbackDomains).find(d => originalUrl.includes(d));
+  const fallbackUrls = domain ? [originalUrl, ...fallbackDomains[domain].map(dom => replaceDomain(originalUrl, dom))] : [originalUrl];
 
-  const urlsToTry = [originalUrl, ...fallbackUrls];
-  for (const url of urlsToTry) {
+  for (const url of fallbackUrls) {
+    console.log(`Trying: ${url}`);
     try {
-      console.log("Trying:", url);
-      const info = await runYtDlp(url);
-      console.log("Success:", url);
-      return info;
+      const { stdout } = await execFilePromise(ytdlpPath, [
+        "--dump-json",
+        "--no-playlist",
+        "--no-warnings",
+        "-f", "best",
+        url
+      ]);
+
+      const data = JSON.parse(stdout);
+      const formats = (data.formats || []).filter(f => f.url && f.format_note).map(f => ({
+        quality: f.format_note || f.format || "unknown",
+        size: f.filesize ? (f.filesize / (1024 * 1024)).toFixed(2) + " MB" : "N/A",
+        url: f.url,
+      }));
+
+      return {
+        title: data.title,
+        thumbnail: data.thumbnail,
+        duration: data.duration,
+        formats,
+      };
     } catch (err) {
-      console.log("Failed:", url);
+      console.error(`Failed: ${url}\n`, err.message);
+      continue;
     }
   }
+
   throw new Error("Failed to fetch video info from all sources.");
 }
 
 app.post("/api/download", async (req, res) => {
   const { url } = req.body;
-  if (!url) return res.status(400).json({ error: "No URL provided" });
+
+  if (!url) return res.status(400).json({ error: "URL is required" });
 
   try {
-    const info = await fetchVideoInfoWithFallback(url);
-
-    const response = {
-      title: info.title,
-      thumbnail: info.thumbnail,
-      duration: info.duration,
-      formats: (info.formats || [])
-        .filter(f => f.filesize && f.format_note && f.url)
-        .map(f => ({
-          quality: f.format_note,
-          size: (f.filesize / 1048576).toFixed(2) + " MB",
-          url: f.url,
-        })),
-    };
-
-    res.json(response);
+    const videoInfo = await fetchVideoInfoWithFallback(url);
+    res.json(videoInfo);
   } catch (err) {
-    console.error("Error:", err);
-    res.status(500).json({ error: "Failed to fetch video info from all sources." });
+    res.status(500).json({ error: err.message || "Unknown error" });
   }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
