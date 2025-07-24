@@ -23,7 +23,7 @@ export default function Home() {
     }, 100);
 
     try {
-      const response = await fetch('https://downloader-backend-2.onrender.com', {
+      const response = await fetch('https://downloader-backend-2.onrender.com/api/download', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
