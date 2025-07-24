@@ -2,10 +2,9 @@ services:
   - type: web
     name: downloader-backend
     env: node
-    buildCommand: npm install && npm run build
+    buildCommand: |
+      pip install yt-dlp
+      chmod +x "$(which yt-dlp)"
+      npm install
     startCommand: npm start
-    build:
-      env:
-        PUPPETEER_SKIP_DOWNLOAD: "true"
-    environment:
-      PUPPETEER_EXECUTABLE_PATH: "/usr/bin/google-chrome"
+    rootDir: server
