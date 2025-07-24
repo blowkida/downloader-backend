@@ -1,156 +1,117 @@
-const express = require("express");
-const cors = require("cors");
-const { execFile } = require("child_process");
-const path = require("path");
-const fs = require("fs");
-const puppeteer = require("puppeteer");
+// server/index.js
+
+import express from 'express';
+import cors from 'cors';
+import { execFile } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const app = express();
-const PORT = process.env.PORT;
-
 app.use(cors());
 app.use(express.json());
 
-const YT_DLP_PATH = "C:/Tools/yt-dlp/yt-dlp.exe"; // Make sure this path is correct
-const FALLBACK_DOMAINS = {
-  xhamster: [
-    "xhamster.com",
-    "xhamster19.com",
-    "xhmaster.desi",
-    "xhmaster1.desi",
-    "xhaccess.com",
-    "xhmaster2.com",
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Path to yt-dlp (assumes it's in PATH on Render)
+const ytdlpPath = 'yt-dlp';
+
+// Domains to try for fallback (for sites like xhamster)
+const fallbackDomains = {
+  'xhamster.com': [
+    'xhamster19.com',
+    'xhmaster.desi',
+    'xhmaster1.desi',
+    'xhaccess.com',
+    'xhmaster2.com'
   ],
+  'xhamster19.com': [
+    'xhamster.com',
+    'xhmaster.desi',
+    'xhmaster1.desi',
+    'xhaccess.com',
+    'xhmaster2.com'
+  ]
 };
 
-function replaceDomain(originalUrl, newDomain) {
-  try {
-    const url = new URL(originalUrl);
-    return originalUrl.replace(url.hostname, newDomain);
-  } catch (e) {
-    return originalUrl;
-  }
-}
-
+// Utility to run yt-dlp with a given URL
 function runYtDlp(url, proxy = null) {
   return new Promise((resolve, reject) => {
     const args = [
-      "--dump-json",
-      "--no-warnings",
-      "--no-playlist",
-      "--no-check-certificate",
-      "--no-call-home",
-      "--no-cache-dir",
-      url,
+      '--dump-json',
+      '--no-playlist',
+      '--no-warnings',
+      '--restrict-filenames',
+      '--no-call-home',
+      url
     ];
+
     if (proxy) {
-      args.push(`--proxy=${proxy}`);
+      args.unshift(`--proxy=${proxy}`);
     }
 
-    execFile(YT_DLP_PATH, args, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout) => {
-      if (error) {
-        return reject(error);
-      }
+    execFile(ytdlpPath, args, (error, stdout, stderr) => {
+      if (error) return reject(stderr || error.message);
       try {
-        const json = JSON.parse(stdout);
-        resolve(json);
+        const data = JSON.parse(stdout);
+        resolve(data);
       } catch (e) {
-        reject(e);
+        reject('Failed to parse yt-dlp JSON output');
       }
     });
   });
 }
 
-async function fetchWithFallbackDomains(url) {
-  for (const domainType in FALLBACK_DOMAINS) {
-    if (url.includes(domainType)) {
-      for (const alt of FALLBACK_DOMAINS[domainType]) {
-        const altUrl = replaceDomain(url, alt);
-        try {
-          const info = await runYtDlp(altUrl);
-          return info;
-        } catch (err) {
-          continue;
-        }
-      }
-    }
-  }
-  throw new Error("All fallback domains failed.");
-}
+// Try all fallbacks one by one
+async function fetchVideoInfoWithFallback(url) {
+  const domain = new URL(url).hostname.replace('www.', '');
+  const fallbacks = fallbackDomains[domain] || [];
 
-async function scrapeWithPuppeteer(url) {
-  const browser = await puppeteer.launch({
-    headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
-  const page = await browser.newPage();
+  const urlsToTry = [url, ...fallbacks.map(d => url.replace(domain, d))];
 
-  try {
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-
-    const data = await page.evaluate(() => {
-      const title = document.querySelector("title")?.innerText || "Unknown";
-      const thumbnail =
-        document.querySelector("meta[property='og:image']")?.content || "";
-      const duration =
-        document.querySelector("meta[itemprop='duration']")?.content || "Unknown";
-      return {
-        title,
-        thumbnail,
-        duration,
-        formats: [],
-      };
-    });
-
-    await browser.close();
-    return data;
-  } catch (err) {
-    await browser.close();
-    throw err;
-  }
-}
-
-app.post("/api/download", async (req, res) => {
-  const { url } = req.body;
-
-  if (!url) return res.status(400).json({ error: "Missing URL." });
-
-  try {
-    let info;
-
+  for (let u of urlsToTry) {
     try {
-      info = await runYtDlp(url, "socks5://127.0.0.1:9050"); // Tor/Proxy supported
-    } catch (e1) {
-      try {
-        info = await fetchWithFallbackDomains(url);
-      } catch (e2) {
-        info = await scrapeWithPuppeteer(url); // last resort
-      }
+      console.log('Trying:', u);
+      const info = await runYtDlp(u);
+      return info;
+    } catch (e) {
+      console.log('Failed:', u);
     }
+  }
 
-    const response = {
-      title: info.title || "Unknown",
-      thumbnail: info.thumbnail || "",
-      duration: info.duration || info.length_seconds || "Unknown",
-      formats: [],
-    };
+  throw new Error('Failed to fetch video info from all sources.');
+}
 
-    if (info.formats?.length) {
-      response.formats = info.formats
-        .filter((f) => f.url && f.format_note)
-        .map((f) => ({
-          quality: f.format_note,
-          size: f.filesize ? `${(f.filesize / 1024 / 1024).toFixed(2)} MB` : "N/A",
-          url: f.url,
-        }));
-    }
+// API endpoint
+app.post('/api/download', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'Missing URL' });
 
-    res.json(response);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch video info from all sources." });
+  try {
+    const info = await fetchVideoInfoWithFallback(url);
+
+    const formats = (info.formats || [])
+      .filter(f => f.filesize && f.format_note && f.url)
+      .map(f => ({
+        quality: f.format_note || f.format || f.resolution || 'unknown',
+        size: `${(f.filesize / (1024 * 1024)).toFixed(2)} MB`,
+        url: f.url
+      }));
+
+    return res.json({
+      title: info.title,
+      thumbnail: info.thumbnail,
+      duration: info.duration,
+      formats
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: 'Failed to fetch video info from all sources.' });
   }
 });
 
+// Bind to port
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
