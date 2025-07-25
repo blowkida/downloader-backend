@@ -44,7 +44,18 @@ async function extractXvideos(page) {
   const title = await page.title();
   const videoUrl = await page.$eval("video > source", el => el.src);
   const thumbnail = await page.$eval("meta[property='og:image']", el => el.content);
-
+  const duration = await page.$eval("meta[itemprop='duration']", el => el.content);
+  const videoId = new URL(videoUrl).searchParams.get("id");
+  const videoUrlWithId = `https://www.xvideos.com/video${videoId}`;
+  const videoUrl = `https://www.xvideos.com/video${videoId}`;
+  if (!videoUrl) throw new Error("Video URL not found");
+  console.log("✅ Puppeteer scraping success for:", url);
+console.log("Extracted video URL:", videoUrl);
+  console.log("Extracted video ID:", videoId);
+  console.log("Extracted video title:", title);
+  console.log("Extracted video thumbnail:", thumbnail);
+  console.log("Extracted video duration:", duration);
+  
   return {
     title,
     thumbnail,
