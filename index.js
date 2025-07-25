@@ -41,16 +41,3 @@ app.post('/api/video', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-  // 2. Try fallbacks
-  const fallbacks = getFallbackUrls(originalUrl);
-  for (const fb of fallbacks) {
-    info = await runYtDlp(fb, originalUrl);
-    if (info) return info;
-  }
-
-  // 3. Puppeteer scrape
-  info = await puppeteerScrape(originalUrl);
-  if (info) return info;
-
-  return null;
-}   
