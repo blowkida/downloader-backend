@@ -97,15 +97,20 @@ function parseVideoInfo(info) {
     title: info.title,
     thumbnail: info.thumbnail,
     duration: info.duration,
-    formats: info.formats
-      .filter(f => f.url && f.format_note && f.filesize)
+    formats: (info.formats || [])
+      .filter(f => f.url)
       .map(f => ({
-        quality: f.format_note,
-        size: formatBytes(f.filesize),
+        quality:
+          f.format_note ||
+          f.resolution ||
+          f.format_id ||
+          "Unknown",
+        size: formatBytes(f.filesize || f.filesize_approx),
         url: f.url,
       })),
   };
 }
+
 
 function formatBytes(bytes) {
   if (!bytes) return "Unknown";
