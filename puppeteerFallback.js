@@ -40,27 +40,91 @@ export default async function tryWithPuppeteer(url) {
 
 // ----------- Custom scrapers for each domain ------------
 
-async function extractXvideos(page) {
-  const title = await page.title();
-  const videoUrl = await page.$eval("video > source", el => el.src);
-  const thumbnail = await page.$eval("meta[property='og:image']", el => el.content);
-  const duration = await page.$eval("meta[itemprop='duration']", el => el.content);
-  if (!videoUrl) throw new Error("Video URL not found");
-  console.log("✅ Puppeteer scraping success for:", url);
-  console.log("Extracted video URL:", videoUrl);
-  
-  return {
-    title,
-    thumbnail,
-    duration: null,
-    formats: [
-      {
-        quality: "Default",
-        size: "Unknown",
-        url: videoUrl,
-      },
-    ],
-  };
+export async function extractXvideos(page) {
+  try {
+    // Accept GDPR/consent popup if present
+    await page.goto("https://www.xvideos.com", { waitUntil: "domcontentloaded" });
+
+    const acceptButton = await page.$("button#i_accept"); // Check if "I Accept" button exists
+    if (acceptButton) {
+      await acceptButton.click();
+      await page.waitForTimeout(1000); // Let the page react to click
+    }
+
+    await page.goto(page.url(), { waitUntil: "networkidle2" }); // Revisit the actual video page
+
+    const title = await page.title();
+
+    const videoUrl = await page.$eval("video > source", (el) => el.src);
+    const thumbnail = await page.$eval(
+      "meta[property='og:image']",
+      (el) => el.content
+    );
+
+    console.log("✅ Puppeteer scraping success for:", title);
+    console.log("Extracted video URL:", videoUrl);
+
+    return {
+      title,
+      thumbnail,
+      duration: null,
+      formats: [
+        {
+          quality: "Default",
+          size: "Unknown",
+          url: videoUrl,
+        },
+      ],
+    };
+  } catch (err) {
+    console.error("❌ Puppeteer failed to extract XVideos:", err.message);
+    return {
+      failed: true,
+    };
+  }
+}
+export async function extractqorno(page) {
+  try {
+    // Accept GDPR/consent popup if present
+    await page.goto("https://www.qorno.com/", { waitUntil: "domcontentloaded" });
+
+    const acceptButton = await page.$("button#i_accept"); // Check if "I Accept" button exists
+    if (acceptButton) {
+      await acceptButton.click();
+      await page.waitForTimeout(1000); // Let the page react to click
+    }
+
+    await page.goto(page.url(), { waitUntil: "networkidle2" }); // Revisit the actual video page
+
+    const title = await page.title();
+
+    const videoUrl = await page.$eval("video > source", (el) => el.src);
+    const thumbnail = await page.$eval(
+      "meta[property='og:image']",
+      (el) => el.content
+    );
+
+    console.log("✅ Puppeteer scraping success for:", title);
+    console.log("Extracted video URL:", videoUrl);
+
+    return {
+      title,
+      thumbnail,
+      duration: null,
+      formats: [
+        {
+          quality: "Default",
+          size: "Unknown",
+          url: videoUrl,
+        },
+      ],
+    };
+  } catch (err) {
+    console.error("❌ Puppeteer failed to extract XVideos:", err.message);
+    return {
+      failed: true,
+    };
+  }
 }
 
 async function extractXhamster(page) {
