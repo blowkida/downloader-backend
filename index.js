@@ -1,42 +1,12 @@
 import express from "express";
 import cors from "cors";
 import { execYtDlp } from "./ytDlpHelper.js";
-import fallbackDomains from "./fallbackDomains.js";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
-
-const fetchVideoInfoWithFallback = async (url) => {
-  let finalError = null;
-
-  const tryFetch = async (targetUrl) => {
-    try {
-      const result = await execYtDlp(targetUrl);
-      if (result?.formats?.length) return result;
-    } catch (err) {
-      finalError = err;
-    }
-    return null;
-  };
-
-  let info = await tryFetch(url);
-  if (info) return info;
-
-  for (const fallback of fallbackDomains) {
-    if (url.includes(fallback.original)) {
-      for (const domain of fallback.alternatives) {
-        const newUrl = url.replace(fallback.original, domain);
-        info = await tryFetch(newUrl);
-        if (info) return info;
-      }
-    }
-  }
-
-  throw new Error("Failed to fetch video info from all sources.");
-};
 
 app.post("/api/download", async (req, res) => {
   const { url } = req.body;
@@ -45,7 +15,7 @@ app.post("/api/download", async (req, res) => {
   console.log("Trying:", url);
 
   try {
-    const info = await fetchVideoInfoWithFallback(url);
+    const info = await execYtDlp(url);
     const video = {
       title: info.title,
       thumbnail: info.thumbnail,
