@@ -1,6 +1,6 @@
-import { execYtDlp } from "yt-dlp-exec";
+import ytDlpExec from "yt-dlp-exec"; // ✅ Correct way to import CommonJS module
 import fallbackDomains from "./fallbackDomains.js";
-import tryWithPuppeteer from "./puppeteerFallback.js";
+import tryWithPuppeteer from "./puppeteerFallback.js"; // ✅ Correct default import
 
 export async function fetchVideoInfo(url) {
   const baseOptions = {
@@ -14,7 +14,7 @@ export async function fetchVideoInfo(url) {
   };
 
   try {
-    const info = await execYtDlp(url, baseOptions);
+    const info = await ytDlpExec(url, baseOptions); // ✅ yt-dlp attempt
     return extractVideoData(info);
   } catch (err) {
     console.warn("yt-dlp failed on original URL:", err.message);
@@ -24,7 +24,7 @@ export async function fetchVideoInfo(url) {
   const fallbackUrl = getFallbackUrl(url);
   if (fallbackUrl) {
     try {
-      const info = await execYtDlp(fallbackUrl, baseOptions);
+      const info = await ytDlpExec(fallbackUrl, baseOptions);
       return extractVideoData(info);
     } catch (err) {
       console.warn("yt-dlp failed on fallback domain:", err.message);
