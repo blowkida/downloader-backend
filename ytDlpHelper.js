@@ -8,6 +8,6 @@ export const execYtDlp = async (url) => {
     referer: url,
     geoBypass: true,
     // Use proxy if needed
-    proxy: process.env.PROXY || "", // e.g., http://proxyhost:port
+    proxy: process.env.PROXY || "http://138.197.68.35:4857", 
   });
 };

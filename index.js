@@ -11,6 +11,7 @@ const PORT = process.env.PORT || 10000;
 
 const fetchVideoInfoWithFallback = async (url) => {
   let finalError = null;
+const proxy = 'http://198.199.86.11:8080';
 
   const tryFetch = async (targetUrl) => {
     try {
