@@ -3,8 +3,8 @@ services:
     name: downloader-backend
     env: node
     buildCommand: |
-      pip install yt-dlp
-      chmod +x "$(which yt-dlp)"
+      apt-get update && apt-get install -y curl
+      curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o yt-dlp
+      chmod +x yt-dlp
       npm install
     startCommand: npm start
-    rootDir: server

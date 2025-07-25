@@ -1,37 +1,48 @@
 import ytdlp from "yt-dlp-exec";
 import fallbackDomains from "./fallbackDomains.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
-// Main function to execute yt-dlp with fallback and optional proxy
+// Resolve __dirname in ES module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Path to cookies.txt file
+const cookieFilePath = path.join(__dirname, "youtube-cookies.txt");
+
 export async function execYtDlp(originalUrl, proxy = null) {
   const domainsToTry = [originalUrl];
 
-  // Extract hostname
+  // Add fallback domains for adult sites
   const url = new URL(originalUrl);
   const domain = url.hostname.replace("www.", "");
-
-  // Add fallback domains if available
   const fallback = fallbackDomains[domain];
-  if (fallback && Array.isArray(fallback)) {
-    fallback.forEach((altDomain) => {
+
+  if (fallback && fallback.length > 0) {
+    for (const altDomain of fallback) {
       const altUrl = originalUrl.replace(domain, altDomain);
       domainsToTry.push(altUrl);
-    });
+    }
   }
 
-  // Attempt each domain variant
+  // Try each URL until one succeeds
   for (const urlToTry of domainsToTry) {
     try {
       const options = {
         dumpSingleJson: true,
         noCheckCertificate: true,
         noWarnings: true,
-        referer: urlToTry,
         preferFreeFormats: true,
+        referer: urlToTry,
         proxy: proxy || undefined,
+        args: [
+          "--cookies",
+          cookieFilePath,
+        ],
       };
 
       const info = await ytdlp(urlToTry, options);
-      if (info?.formats) {
+      if (info && info.formats) {
         return info;
       }
     } catch (err) {
@@ -39,6 +50,5 @@ export async function execYtDlp(originalUrl, proxy = null) {
     }
   }
 
-  // If all attempts fail
   throw new Error("All fallback attempts failed to fetch video info.");
 }

@@ -11,7 +11,6 @@ const PORT = process.env.PORT || 10000;
 
 const fetchVideoInfoWithFallback = async (url) => {
   let finalError = null;
-const proxy = 'http://198.199.86.11:8080';
 
   const tryFetch = async (targetUrl) => {
     try {
@@ -26,7 +25,6 @@ const proxy = 'http://198.199.86.11:8080';
   let info = await tryFetch(url);
   if (info) return info;
 
-  // If fallback supported, try domain variations
   for (const fallback of fallbackDomains) {
     if (url.includes(fallback.original)) {
       for (const domain of fallback.alternatives) {
@@ -55,15 +53,16 @@ app.post("/api/download", async (req, res) => {
       formats: info.formats
         .filter(f => f.filesize && f.format_note && f.url)
         .map(f => ({
+          type: f.ext || "video",
           quality: f.format_note,
           size: (f.filesize / (1024 * 1024)).toFixed(2) + " MB",
           url: f.url
         }))
     };
-    res.json(video);
+    res.json({ success: true, video });
   } catch (err) {
     console.error("Error:", err.message);
-    res.status(500).json({ error: "Failed to fetch video info from all sources." });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
