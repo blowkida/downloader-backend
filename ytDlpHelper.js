@@ -1,120 +1,128 @@
-import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import ytdlp from "yt-dlp-exec";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import ytDlpExec from "yt-dlp-exec";
 import puppeteer from "puppeteer";
 
-// Get __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const execFileAsync = promisify(execFile);
 
-// Path to YouTube cookies
-const youtubeCookiesPath = path.join(__dirname, "youtube-cookies");
+// Universal fallback by replacing domain
+async function tryFallbackDomains(originalUrl) {
+  const fallbackDomains = [
+    "xhamster.desi",
+    "xhmaster.desi",
+    "xhmaster1.desi",
+    "xhaccess.com",
+    "xhmaster19.com",
+    "xhmaster2.com",
+  ];
 
-// Helper to detect YouTube URLs
-function isYouTubeURL(url) {
-  return url.includes("youtube.com") || url.includes("youtu.be");
-}
-
-// Main fetch function
-export async function fetchVideoInfo(url) {
-  try {
-    console.log(`Trying: ${url}`);
-
-    const ytdlpArgs = {
-      dumpSingleJson: true,
-      noCheckCertificates: true,
-      noWarnings: true,
-      preferFreeFormats: true,
-      youtubeSkipDashManifest: true,
-      referer: url,
-    };
-
-    // If YouTube, pass cookies
-    if (isYouTubeURL(url) && fs.existsSync(youtubeCookiesPath)) {
-      console.log("Using YouTube cookies...");
-      ytdlpArgs.cookies = youtubeCookiesPath;
-    }
-
-    const info = await ytdlp(url, ytdlpArgs);
-    if (!info.formats || info.formats.length === 0) {
-      throw new Error("No formats found");
-    }
-
-    return parseVideoInfo(info);
-  } catch (err) {
-    console.error("yt-dlp failed on original URL:", err.message);
-
-    // Puppeteer Fallback (Universal)
-    try {
-      const puppeteerInfo = await extractWithPuppeteer(url);
-      if (puppeteerInfo) {
-        return puppeteerInfo;
-      } else {
-        throw new Error("Puppeteer returned no usable data");
+  const fallbackUrls = fallbackDomains
+    .map(domain => {
+      try {
+        const url = new URL(originalUrl);
+        url.hostname = domain;
+        return url.toString();
+      } catch {
+        return null;
       }
-    } catch (fallbackErr) {
-      console.error("❌ Final Error:", fallbackErr.message);
-      return null;
-    }
-  }
+    })
+    .filter(Boolean);
+
+  return fallbackUrls;
 }
 
-// Puppeteer fallback handler
-async function extractWithPuppeteer(url) {
-  console.log("Trying Puppeteer fallback...");
-
-  const browser = await puppeteer.launch({
-    headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
-
+// Optional: Puppeteer fallback (disabled on production like Render)
+async function tryPuppeteerFallback(url) {
   try {
+    const browser = await puppeteer.launch({ headless: "new" });
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 20000 });
 
     const title = await page.title();
-    const thumbnail = await page.$eval("meta[property='og:image']", el => el.content).catch(() => null);
-    const duration = await page.$eval("meta[itemprop='duration']", el => el.content).catch(() => null);
+    const thumbnail = await page.screenshot({ type: "jpeg" });
+
+    await browser.close();
 
     return {
-      title: title || "Unknown Title",
-      thumbnail: thumbnail || "",
-      duration: duration || "Unknown",
+      title,
+      thumbnail: `data:image/jpeg;base64,${thumbnail.toString("base64")}`,
       formats: [],
     };
-  } catch (err) {
-    console.error("Puppeteer fallback failed:", err.message);
+  } catch (error) {
+    console.error("Puppeteer Fallback Error:", error.message);
     return null;
-  } finally {
-    await browser.close();
   }
 }
 
-// Parser for yt-dlp JSON
-function parseVideoInfo(info) {
+export async function fetchVideoInfo(originalUrl, usePuppeteerFallback = true) {
+  let urlsToTry = [originalUrl];
+  const isYouTube = originalUrl.includes("youtube.com") || originalUrl.includes("youtu.be");
+
+  // Add fallback domains if not YouTube
+  if (!isYouTube) {
+    const fallbacks = await tryFallbackDomains(originalUrl);
+    urlsToTry.push(...fallbacks);
+  }
+
+  let info = null;
+  let lastError = null;
+
+  for (const url of urlsToTry) {
+    try {
+      const args = [
+        url,
+        "--dump-single-json",
+        "--no-check-certificates",
+        "--no-warnings",
+        "--prefer-free-formats",
+        "--youtube-skip-dash-manifest",
+        "--referer", url,
+      ];
+
+      if (isYouTube) {
+        args.push("--cookies", path.join(__dirname, "youtube-cookies"));
+      }
+
+      info = await ytDlpExec(args, {
+        shell: true,
+        env: { ...process.env },
+      });
+
+      if (info) break;
+    } catch (error) {
+      lastError = error;
+      console.warn(`yt-dlp failed on ${url}:`, error.message);
+    }
+  }
+
+  // Final fallback: Puppeteer (only if not on production)
+  if (!info && usePuppeteerFallback && process.env.NODE_ENV !== "production") {
+    console.log("Trying Puppeteer fallback...");
+    info = await tryPuppeteerFallback(originalUrl);
+  }
+
+  if (!info) {
+    throw new Error("Unable to fetch video info: " + (lastError?.message || "Unknown error"));
+  }
+
+  const formats = (info.formats || [])
+    .filter(f => f.filesize && f.format_id && f.ext)
+    .map(f => ({
+      formatId: f.format_id,
+      type: f.ext,
+      quality: f.format_note || f.resolution || f.quality || "unknown",
+      size: f.filesize,
+      url: f.url,
+    }));
+
   return {
-    title: info.title,
-    thumbnail: info.thumbnail,
-    duration: info.duration,
-    formats: (info.formats || [])
-      .filter(f => f.url)
-      .map(f => ({
-        quality:
-          f.format_note ||
-          f.resolution ||
-          f.format_id ||
-          "Unknown",
-        size: formatBytes(f.filesize || f.filesize_approx),
-        url: f.url,
-      })),
+    title: info.title || "Untitled",
+    thumbnail: info.thumbnail || "",
+    duration: info.duration || 0,
+    formats,
   };
-}
-
-
-function formatBytes(bytes) {
-  if (!bytes) return "Unknown";
-  const sizes = ["B", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + " " + sizes[i];
 }
