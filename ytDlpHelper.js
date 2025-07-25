@@ -1,148 +1,134 @@
-import ytdlp from "yt-dlp-exec";
+import { exec } from "yt-dlp-exec";
+import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
-import fallbackDomains from "./fallbackDomains.js";
 import puppeteer from "puppeteer";
 
-// Resolve __dirname in ES module
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Cookie directory
-const cookieDir = path.join(__dirname, "cookies");
-
-// Get cookie file based on domain
-function getCookieFile(domain) {
-  const knownSites = {
-    "youtube.com": "youtube.txt",
-    "pornhat.com": "pornhat.txt",
-    "xhamster.com": "xhamster.txt",
-    "xhamster1.desi": "xhamster.txt",
-    "xhaccess.com": "xhamster.txt",
-    "xhmaster1.desi": "xhamster.txt",
-    "xhmaster2.com": "xhamster.txt",
-    "xhmaster19.com": "xhamster.txt",
-    "pornhub.com": "pornhub.txt",
-    "xvideos.com": "xvideos.txt",
-    "redtube.com": "redtube.txt",
-    "youporn.com": "youporn.txt",
-    "spankbang.com": "spankbang.txt",
-    "tiktok.com": "tiktok.txt",
-    "twitter.com": "twitter.txt",
-    "instagram.com": "instagram.txt",
-    "facebook.com": "facebook.txt",
-    "vimeo.com": "vimeo.txt",
-    "dailymotion.com": "dailymotion.txt",
-    "bilibili.com": "bilibili.txt",
-    "twitch.tv": "twitch.txt",
-    "rumble.com": "rumble.txt",
-    "odnoklassniki.ru": "ok.txt",
-    "vk.com": "vk.txt",
-    "weibo.com": "weibo.txt",
-    "reddit.com": "reddit.txt",
-    "tumblr.com": "tumblr.txt",
-    "soundcloud.com": "soundcloud.txt",
-    "bandcamp.com": "bandcamp.txt",
-    "mixcloud.com": "mixcloud.txt",
-    "spotify.com": "spotify.txt",
-    "apple.com": "apple.txt",
-    "deezer.com": "deezer.txt",
-    "t.me": "telegram.txt",
-    "telegram.org": "telegram.txt",
-    "discord.com": "discord.txt",
-    "archive.org": "archive.txt",
-    "google.com": "google.txt",
-    "vkontakte.ru": "vk.txt",
-    "ok.ru": "ok1.txt",
-    "9gag.com": "9gag.txt",
-  };
-
-  for (const key in knownSites) {
-    if (domain.includes(key)) {
-      return path.join(cookieDir, knownSites[key]);
-    }
+const fallbackMap = [
+  {
+    original: "xhamster.com",
+    alternatives: [
+      "xhaccess.com",
+      "xhmaster.desi",
+      "xhmaster1.desi",
+      "xhmaster2.com",
+      "xhmaster19.com"
+    ]
+  },
+  {
+    original: "pornhub.com",
+    alternatives: [
+      "pornhub.org",
+      "pornhubpremium.com"
+    ]
   }
+];
 
+const cookiePathMap = {
+  "xhamster.com": "./cookies/xhamster.com_cookies.txt",
+  "pornhub.com": "./cookies/pornhub.com_cookies.txt"
+};
+
+function getCookieFile(url) {
+  try {
+    const domain = Object.keys(cookiePathMap).find(d => url.includes(d));
+    const cookiePath = domain ? cookiePathMap[domain] : null;
+    if (cookiePath && fs.existsSync(cookiePath)) {
+      return cookiePath;
+    }
+  } catch (e) {
+    console.warn("Cookie file not found or failed to read.");
+  }
   return null;
 }
 
-// Fallback using Puppeteer scraping
-async function fallbackWithPuppeteer(url) {
-  console.log("Fallback to Puppeteer for:", url);
+async function runYtDlp(url, useCookies = true) {
+  const options = {
+    dumpSingleJson: true,
+    noCheckCertificates: true,
+    preferFreeFormats: true,
+    youtubeSkipDashManifest: true,
+    referer: url,
+    noWarnings: true,
+    forceGenericExtractor: false
+  };
 
+  const cookieFile = useCookies ? getCookieFile(url) : null;
+  if (cookieFile) {
+    options.cookies = cookieFile;
+  }
+
+  return await exec(url, options);
+}
+
+function buildFallbackUrls(originalUrl) {
+  for (const entry of fallbackMap) {
+    if (originalUrl.includes(entry.original)) {
+      return entry.alternatives.map(alt =>
+        originalUrl.replace(entry.original, alt)
+      );
+    }
+  }
+  return [];
+}
+
+async function puppeteerExtractVideoInfo(url) {
+  console.log("Trying Puppeteer as last resort...");
   const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    headless: "new",
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
   });
 
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
 
-    // Wait and extract title
-    const title = await page.title();
-    const thumbnail = await page.$eval("meta[property='og:image']", el => el.content);
-    const duration = await page.$eval("meta[itemprop='duration']", el => el.content)
-      .catch(() => null);
+    const pageTitle = await page.title();
+    const thumbnail = await page.$eval("meta[property='og:image']", el => el.content).catch(() => null);
+    const duration = await page.$eval("meta[property='video:duration']", el => parseInt(el.content)).catch(() => null);
+    const videoUrl = await page.$eval("video source", el => el.src).catch(() => null);
+
+    if (!videoUrl) throw new Error("No downloadable video found on page.");
 
     return {
-      title,
+      title: pageTitle,
       thumbnail,
       duration,
-      formats: [], // Can't get formats without yt-dlp
-      webpage_url: url,
+      formats: [
+        {
+          ext: "mp4",
+          format_note: "Puppeteer Extracted",
+          filesize: null,
+          url: videoUrl
+        }
+      ]
     };
-  } catch (err) {
-    console.warn("Puppeteer failed:", err.message);
-    return null;
   } finally {
     await browser.close();
   }
 }
 
-// Main function
-export async function execYtDlp(originalUrl, proxy = null) {
-  const urlObj = new URL(originalUrl);
-  const domain = urlObj.hostname.replace("www.", "");
+export async function execYtDlp(url) {
+  const triedUrls = [url, ...buildFallbackUrls(url)];
 
-  const urlsToTry = [originalUrl];
-  const fallback = fallbackDomains[domain];
-  if (fallback && fallback.length > 0) {
-    for (const alt of fallback) {
-      urlsToTry.push(originalUrl.replace(domain, alt));
-    }
-  }
-
-  for (const urlToTry of urlsToTry) {
-    const currentDomain = new URL(urlToTry).hostname.replace("www.", "");
-    const cookieFile = getCookieFile(currentDomain);
-
+  for (const attemptUrl of triedUrls) {
     try {
-      const options = {
-        dumpSingleJson: true,
-        noCheckCertificate: true,
-        noWarnings: true,
-        preferFreeFormats: true,
-        referer: urlToTry,
-        proxy: proxy || undefined,
-        ...(cookieFile && { cookies: cookieFile }),
-      };
-
-      console.log("Trying yt-dlp on:", urlToTry);
-      const info = await ytdlp(urlToTry, options);
-      if (info && info.formats && info.formats.length > 0) {
-        return info;
+      console.log("Trying yt-dlp for:", attemptUrl);
+      const result = await runYtDlp(attemptUrl);
+      if (result && result.formats?.length) {
+        return result;
       }
     } catch (err) {
-      console.warn(`yt-dlp failed on ${urlToTry}:`, err?.stderr || err?.message);
+      console.warn("yt-dlp failed for:", attemptUrl);
     }
   }
 
-  // All yt-dlp attempts failed, try Puppeteer
-  const scraped = await fallbackWithPuppeteer(originalUrl);
-  if (scraped) {
-    return scraped;
+  // If all yt-dlp attempts fail, try Puppeteer
+  try {
+    const puppeteerResult = await puppeteerExtractVideoInfo(url);
+    if (puppeteerResult) return puppeteerResult;
+  } catch (err) {
+    console.warn("Puppeteer fallback failed:", err.message);
   }
 
-  throw new Error("All fallback attempts (yt-dlp + Puppeteer) failed.");
+  throw new Error("All attempts to extract video info failed.");
 }
