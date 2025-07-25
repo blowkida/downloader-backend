@@ -88,7 +88,6 @@ export async function fetchVideoInfo(originalUrl, usePuppeteerFallback = true) {
       }
 
       info = await ytDlpExec(args, {
-        shell: true,
         env: { ...process.env },
       });
 
