@@ -22,7 +22,7 @@ export default async function tryWithPuppeteer(url) {
       formats: [],
     };
 
-    if (hostname.includes("xvideos")) {
+    if (hostname.includes("xvideos") || hostname.includes("xvideos2")) {
       result = await extractXvideos(page);
     } else if (hostname.includes("xhamster")) {
       result = await extractXhamster(page);
