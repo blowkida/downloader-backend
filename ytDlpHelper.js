@@ -1,7 +1,9 @@
-import { exec } from "yt-dlp-exec";
+import ytDlp from "yt-dlp-exec"; // ✅ default import for CommonJS module
 import fs from "fs";
 import path from "path";
 import puppeteer from "puppeteer";
+
+const exec = ytDlp; // ✅ assign for consistency
 
 const fallbackMap = [
   {
@@ -24,8 +26,8 @@ const fallbackMap = [
 ];
 
 const cookiePathMap = {
-  "xhamster.com": "./cookies/xhamster.com_cookies.txt",
-  "pornhub.com": "./cookies/pornhub.com_cookies.txt"
+  "xhamster.com": "./cookies/xhamster.txt",
+  "pornhub.com": "./cookies/pornhub.txt"
 };
 
 function getCookieFile(url) {
