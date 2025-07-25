@@ -1,45 +1,44 @@
-import { exec } from 'child_process';
-import fallbackDomains from './fallbackDomains.js';
+import ytdlp from "yt-dlp-exec";
+import fallbackDomains from "./fallbackDomains.js";
 
-const runYtDlpCommand = (url) => {
-  return new Promise((resolve, reject) => {
-    const command = `yt-dlp "${url}" --dump-single-json --no-warnings --no-call-home --referer "${url}" --geo-bypass`;
+// Main function to execute yt-dlp with fallback and optional proxy
+export async function execYtDlp(originalUrl, proxy = null) {
+  const domainsToTry = [originalUrl];
 
-    exec(command, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
-      if (error) {
-        return reject(stderr || error.message);
-      }
-      try {
-        const json = JSON.parse(stdout);
-        resolve(json);
-      } catch (err) {
-        reject("Failed to parse yt-dlp JSON: " + err.message);
-      }
-    });
-  });
-};
+  // Extract hostname
+  const url = new URL(originalUrl);
+  const domain = url.hostname.replace("www.", "");
 
-export const fetchVideoInfo = async (url) => {
-  const domain = new URL(url).hostname;
-
-  const fallbackList = [url];
-
-  if (domain.includes("xhamster")) {
-    fallbackDomains.xhamster.forEach(fallback => {
-      fallbackList.push(url.replace(domain, fallback));
+  // Add fallback domains if available
+  const fallback = fallbackDomains[domain];
+  if (fallback && Array.isArray(fallback)) {
+    fallback.forEach((altDomain) => {
+      const altUrl = originalUrl.replace(domain, altDomain);
+      domainsToTry.push(altUrl);
     });
   }
 
-  for (const testUrl of fallbackList) {
+  // Attempt each domain variant
+  for (const urlToTry of domainsToTry) {
     try {
-      const data = await runYtDlpCommand(testUrl);
-      if (data?.formats?.length) {
-        return data;
+      const options = {
+        dumpSingleJson: true,
+        noCheckCertificate: true,
+        noWarnings: true,
+        referer: urlToTry,
+        preferFreeFormats: true,
+        proxy: proxy || undefined,
+      };
+
+      const info = await ytdlp(urlToTry, options);
+      if (info?.formats) {
+        return info;
       }
-    } catch (e) {
-      console.warn(`Failed on ${testUrl}:`, e);
+    } catch (err) {
+      console.warn(`yt-dlp failed for ${urlToTry}:`, err?.stderr || err?.message);
     }
   }
 
-  throw new Error("Failed to fetch video info from all sources.");
-};
+  // If all attempts fail
+  throw new Error("All fallback attempts failed to fetch video info.");
+}
