@@ -35,10 +35,7 @@ export async function execYtDlp(originalUrl, proxy = null) {
         preferFreeFormats: true,
         referer: urlToTry,
         proxy: proxy || undefined,
-        args: [
-          "--cookies",
-          cookieFilePath,
-        ],
+        cookies: cookieFilePath, // ✅ Correct usage (replaces args)
       };
 
       const info = await ytdlp(urlToTry, options);
