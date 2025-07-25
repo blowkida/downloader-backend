@@ -1,51 +1,69 @@
-import ytdlp from "yt-dlp-exec";
+import { execYtDlp } from "yt-dlp-exec";
 import fallbackDomains from "./fallbackDomains.js";
-import path from "path";
-import { fileURLToPath } from "url";
+import tryWithPuppeteer from "./puppeteerFallback.js";
 
-// Resolve __dirname in ES module
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+export async function fetchVideoInfo(url) {
+  const baseOptions = {
+    dumpSingleJson: true,
+    noCheckCertificates: true,
+    noWarnings: true,
+    preferFreeFormats: true,
+    youtubeSkipDashManifest: true,
+    referer: url,
+    // Add proxy or cookies here if needed
+  };
 
-// Path to cookies.txt file
-const cookieFilePath = path.join(__dirname, "youtube-cookies.txt");
-
-export async function execYtDlp(originalUrl, proxy = null) {
-  const domainsToTry = [originalUrl];
-
-  // Add fallback domains for adult sites
-  const url = new URL(originalUrl);
-  const domain = url.hostname.replace("www.", "");
-  const fallback = fallbackDomains[domain];
-
-  if (fallback && fallback.length > 0) {
-    for (const altDomain of fallback) {
-      const altUrl = originalUrl.replace(domain, altDomain);
-      domainsToTry.push(altUrl);
-    }
+  try {
+    const info = await execYtDlp(url, baseOptions);
+    return extractVideoData(info);
+  } catch (err) {
+    console.warn("yt-dlp failed on original URL:", err.message);
   }
 
-  // Try each URL until one succeeds
-  for (const urlToTry of domainsToTry) {
+  // 🔁 Try fallback domains
+  const fallbackUrl = getFallbackUrl(url);
+  if (fallbackUrl) {
     try {
-      const options = {
-        dumpSingleJson: true,
-        noCheckCertificate: true,
-        noWarnings: true,
-        preferFreeFormats: true,
-        referer: urlToTry,
-        proxy: proxy || undefined,
-        cookies: cookieFilePath, // ✅ Correct usage (replaces args)
-      };
-
-      const info = await ytdlp(urlToTry, options);
-      if (info && info.formats) {
-        return info;
-      }
+      const info = await execYtDlp(fallbackUrl, baseOptions);
+      return extractVideoData(info);
     } catch (err) {
-      console.warn(`yt-dlp failed for ${urlToTry}:`, err?.stderr || err?.message);
+      console.warn("yt-dlp failed on fallback domain:", err.message);
     }
   }
 
-  throw new Error("All fallback attempts failed to fetch video info.");
+  // 🧠 Final fallback: try Puppeteer
+  console.log("Trying Puppeteer fallback...");
+  const puppeteerResult = await tryWithPuppeteer(url);
+  return puppeteerResult;
+}
+
+function getFallbackUrl(originalUrl) {
+  for (const [base, fallbacks] of Object.entries(fallbackDomains)) {
+    if (originalUrl.includes(base)) {
+      for (const domain of fallbacks) {
+        const altUrl = originalUrl.replace(base, domain);
+        return altUrl;
+      }
+    }
+  }
+  return null;
+}
+
+function extractVideoData(info) {
+  if (!info.formats || !info.formats.length) throw new Error("No formats found");
+
+  const formats = info.formats
+    .filter(f => f.filesize && f.url)
+    .map(f => ({
+      quality: f.format_note || f.format_id,
+      size: f.filesize ? (f.filesize / (1024 * 1024)).toFixed(2) + " MB" : "N/A",
+      url: f.url,
+    }));
+
+  return {
+    title: info.title,
+    thumbnail: info.thumbnail,
+    duration: info.duration,
+    formats,
+  };
 }
