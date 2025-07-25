@@ -1,7 +1,8 @@
 import ytdlp from "yt-dlp-exec";
-import fallbackDomains from "./fallbackDomains.js";
 import path from "path";
 import { fileURLToPath } from "url";
+import fallbackDomains from "./fallbackDomains.js";
+import puppeteer from "puppeteer";
 
 // Resolve __dirname in ES module
 const __filename = fileURLToPath(import.meta.url);
@@ -10,13 +11,17 @@ const __dirname = path.dirname(__filename);
 // Cookie directory
 const cookieDir = path.join(__dirname, "cookies");
 
-// Function to get appropriate cookie file for a domain
+// Get cookie file based on domain
 function getCookieFile(domain) {
   const knownSites = {
     "youtube.com": "youtube.txt",
     "pornhat.com": "pornhat.txt",
     "xhamster.com": "xhamster.txt",
     "xhamster1.desi": "xhamster.txt",
+    "xhaccess.com": "xhamster.txt",
+    "xhmaster1.desi": "xhamster.txt",
+    "xhmaster2.com": "xhamster.txt",
+    "xhmaster19.com": "xhamster.txt",
     "pornhub.com": "pornhub.txt",
     "xvideos.com": "xvideos.txt",
     "redtube.com": "redtube.txt",
@@ -34,24 +39,22 @@ function getCookieFile(domain) {
     "odnoklassniki.ru": "ok.txt",
     "vk.com": "vk.txt",
     "weibo.com": "weibo.txt",
-    "9gag.com": "9gag.txt",
     "reddit.com": "reddit.txt",
     "tumblr.com": "tumblr.txt",
-    "liveleak.com": "liveleak.txt",
-    "archive.org": "archive.txt",
     "soundcloud.com": "soundcloud.txt",
     "bandcamp.com": "bandcamp.txt",
     "mixcloud.com": "mixcloud.txt",
     "spotify.com": "spotify.txt",
     "apple.com": "apple.txt",
     "deezer.com": "deezer.txt",
-    "google.com": "google.txt",
     "t.me": "telegram.txt",
     "telegram.org": "telegram.txt",
     "discord.com": "discord.txt",
+    "archive.org": "archive.txt",
+    "google.com": "google.txt",
     "vkontakte.ru": "vk.txt",
     "ok.ru": "ok1.txt",
-
+    "9gag.com": "9gag.txt",
   };
 
   for (const key in knownSites) {
@@ -60,26 +63,59 @@ function getCookieFile(domain) {
     }
   }
 
-  // Default fallback cookie file (optional)
   return null;
 }
 
+// Fallback using Puppeteer scraping
+async function fallbackWithPuppeteer(url) {
+  console.log("Fallback to Puppeteer for:", url);
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+
+    // Wait and extract title
+    const title = await page.title();
+    const thumbnail = await page.$eval("meta[property='og:image']", el => el.content);
+    const duration = await page.$eval("meta[itemprop='duration']", el => el.content)
+      .catch(() => null);
+
+    return {
+      title,
+      thumbnail,
+      duration,
+      formats: [], // Can't get formats without yt-dlp
+      webpage_url: url,
+    };
+  } catch (err) {
+    console.warn("Puppeteer failed:", err.message);
+    return null;
+  } finally {
+    await browser.close();
+  }
+}
+
+// Main function
 export async function execYtDlp(originalUrl, proxy = null) {
-  const domainsToTry = [originalUrl];
   const urlObj = new URL(originalUrl);
   const domain = urlObj.hostname.replace("www.", "");
-  const fallback = fallbackDomains[domain];
 
+  const urlsToTry = [originalUrl];
+  const fallback = fallbackDomains[domain];
   if (fallback && fallback.length > 0) {
-    for (const altDomain of fallback) {
-      const altUrl = originalUrl.replace(domain, altDomain);
-      domainsToTry.push(altUrl);
+    for (const alt of fallback) {
+      urlsToTry.push(originalUrl.replace(domain, alt));
     }
   }
 
-  for (const urlToTry of domainsToTry) {
-    const domainToTry = new URL(urlToTry).hostname.replace("www.", "");
-    const cookieFile = getCookieFile(domainToTry);
+  for (const urlToTry of urlsToTry) {
+    const currentDomain = new URL(urlToTry).hostname.replace("www.", "");
+    const cookieFile = getCookieFile(currentDomain);
 
     try {
       const options = {
@@ -92,15 +128,21 @@ export async function execYtDlp(originalUrl, proxy = null) {
         ...(cookieFile && { cookies: cookieFile }),
       };
 
-      console.log(`Trying: ${urlToTry}`);
+      console.log("Trying yt-dlp on:", urlToTry);
       const info = await ytdlp(urlToTry, options);
-      if (info && info.formats) {
+      if (info && info.formats && info.formats.length > 0) {
         return info;
       }
     } catch (err) {
-      console.warn(`yt-dlp failed for ${urlToTry}:`, err?.stderr || err?.message);
+      console.warn(`yt-dlp failed on ${urlToTry}:`, err?.stderr || err?.message);
     }
   }
 
-  throw new Error("All fallback attempts failed to fetch video info.");
+  // All yt-dlp attempts failed, try Puppeteer
+  const scraped = await fallbackWithPuppeteer(originalUrl);
+  if (scraped) {
+    return scraped;
+  }
+
+  throw new Error("All fallback attempts (yt-dlp + Puppeteer) failed.");
 }
