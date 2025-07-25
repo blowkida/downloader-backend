@@ -1,69 +1,115 @@
-import ytDlpExec from "yt-dlp-exec"; // ✅ Correct way to import CommonJS module
-import fallbackDomains from "./fallbackDomains.js";
-import tryWithPuppeteer from "./puppeteerFallback.js"; // ✅ Correct default import
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import ytdlp from "yt-dlp-exec";
+import puppeteer from "puppeteer";
 
+// Get __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Path to YouTube cookies
+const youtubeCookiesPath = path.join(__dirname, "youtube-cookies");
+
+// Helper to detect YouTube URLs
+function isYouTubeURL(url) {
+  return url.includes("youtube.com") || url.includes("youtu.be");
+}
+
+// Main fetch function
 export async function fetchVideoInfo(url) {
-  const baseOptions = {
-    dumpSingleJson: true,
-    noCheckCertificates: true,
-    noWarnings: true,
-    preferFreeFormats: true,
-    youtubeSkipDashManifest: true,
-    referer: url,
-    // Add proxy or cookies here if needed
-  };
+  try {
+    console.log(`Trying: ${url}`);
+
+    const ytdlpArgs = {
+      dumpSingleJson: true,
+      noCheckCertificates: true,
+      noWarnings: true,
+      preferFreeFormats: true,
+      youtubeSkipDashManifest: true,
+      referer: url,
+    };
+
+    // If YouTube, pass cookies
+    if (isYouTubeURL(url) && fs.existsSync(youtubeCookiesPath)) {
+      console.log("Using YouTube cookies...");
+      ytdlpArgs.cookies = youtubeCookiesPath;
+    }
+
+    const info = await ytdlp(url, ytdlpArgs);
+    if (!info.formats || info.formats.length === 0) {
+      throw new Error("No formats found");
+    }
+
+    return parseVideoInfo(info);
+  } catch (err) {
+    console.error("yt-dlp failed on original URL:", err.message);
+
+    // Puppeteer Fallback (Universal)
+    try {
+      const puppeteerInfo = await extractWithPuppeteer(url);
+      if (puppeteerInfo) {
+        return puppeteerInfo;
+      } else {
+        throw new Error("Puppeteer returned no usable data");
+      }
+    } catch (fallbackErr) {
+      console.error("❌ Final Error:", fallbackErr.message);
+      return null;
+    }
+  }
+}
+
+// Puppeteer fallback handler
+async function extractWithPuppeteer(url) {
+  console.log("Trying Puppeteer fallback...");
+
+  const browser = await puppeteer.launch({
+    headless: "new",
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
 
   try {
-    const info = await ytDlpExec(url, baseOptions); // ✅ yt-dlp attempt
-    return extractVideoData(info);
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
+
+    const title = await page.title();
+    const thumbnail = await page.$eval("meta[property='og:image']", el => el.content).catch(() => null);
+    const duration = await page.$eval("meta[itemprop='duration']", el => el.content).catch(() => null);
+
+    return {
+      title: title || "Unknown Title",
+      thumbnail: thumbnail || "",
+      duration: duration || "Unknown",
+      formats: [],
+    };
   } catch (err) {
-    console.warn("yt-dlp failed on original URL:", err.message);
+    console.error("Puppeteer fallback failed:", err.message);
+    return null;
+  } finally {
+    await browser.close();
   }
-
-  // 🔁 Try fallback domains
-  const fallbackUrl = getFallbackUrl(url);
-  if (fallbackUrl) {
-    try {
-      const info = await ytDlpExec(fallbackUrl, baseOptions);
-      return extractVideoData(info);
-    } catch (err) {
-      console.warn("yt-dlp failed on fallback domain:", err.message);
-    }
-  }
-
-  // 🧠 Final fallback: try Puppeteer
-  console.log("Trying Puppeteer fallback...");
-  const puppeteerResult = await tryWithPuppeteer(url);
-  return puppeteerResult;
 }
 
-function getFallbackUrl(originalUrl) {
-  for (const [base, fallbacks] of Object.entries(fallbackDomains)) {
-    if (originalUrl.includes(base)) {
-      for (const domain of fallbacks) {
-        const altUrl = originalUrl.replace(base, domain);
-        return altUrl;
-      }
-    }
-  }
-  return null;
-}
-
-function extractVideoData(info) {
-  if (!info.formats || !info.formats.length) throw new Error("No formats found");
-
-  const formats = info.formats
-    .filter(f => f.filesize && f.url)
-    .map(f => ({
-      quality: f.format_note || f.format_id,
-      size: f.filesize ? (f.filesize / (1024 * 1024)).toFixed(2) + " MB" : "N/A",
-      url: f.url,
-    }));
-
+// Parser for yt-dlp JSON
+function parseVideoInfo(info) {
   return {
     title: info.title,
     thumbnail: info.thumbnail,
     duration: info.duration,
-    formats,
+    formats: info.formats
+      .filter(f => f.url && f.format_note && f.filesize)
+      .map(f => ({
+        quality: f.format_note,
+        size: formatBytes(f.filesize),
+        url: f.url,
+      })),
   };
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return "Unknown";
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + " " + sizes[i];
 }
