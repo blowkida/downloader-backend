@@ -1,7 +1,8 @@
 import express from "express";
 import cors from "cors";
-import { execYtDlp } from "./ytDlpHelper.js";
 import fallbackDomains from "./fallbackDomains.js";
+import execYtDlp from "./ytDlpHelper.js";
+
 
 const app = express();
 app.use(cors());
@@ -9,6 +10,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
 
+// Fallback fetch logic
 const fetchVideoInfoWithFallback = async (url) => {
   let finalError = null;
 
@@ -38,6 +40,7 @@ const fetchVideoInfoWithFallback = async (url) => {
   throw new Error("Failed to fetch video info from all sources.");
 };
 
+// Download API
 app.post("/api/download", async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: "No URL provided." });
@@ -66,6 +69,17 @@ app.post("/api/download", async (req, res) => {
   }
 });
 
+// Login API
+app.post("/api/login", (req, res) => {
+  const { username, password } = req.body;
+
+  if (username === "BlowKida" && password === "Rn5suman") {
+    return res.json({ success: true, token: "admin-token" });
+  }
+
+  return res.status(401).json({ success: false, error: "Invalid credentials" });
+});
+
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
