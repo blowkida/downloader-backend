@@ -1,103 +1,70 @@
-import { exec } from 'child_process';
-import util from 'util';
-import fs from 'fs/promises';
+// server/ytDlpHelper.js
+
+import { promisify } from 'util';
 import path from 'path';
-import puppeteer from 'puppeteer';
+import fs from 'fs';
+import { execFile } from 'child_process';
+import { URL } from 'url';
 
-const execPromise = util.promisify(exec);
+const execFileAsync = promisify(execFile);
 
-const fallbackDomains = {
+const fallbackDomainMap = {
   'xhamster.com': [
-    'xhmaster.desi',
-    'xhmaster1.desi',
-    'xhaccess.com',
-    'xhmaster19.com',
-    'xhmaster2.com'
+    'xhamster.desi', 'xhamster1.desi', 'xhmaster.desi', 'xhaccess.com', 'xhmaster19.com', 'xhmaster2.com'
+  ],
+  'xvideos.com': [
+    'xvideos2.com', 'xvideos4.com'
+  ],
+  'pornhat.com': [
+    'pornhat.in', 'pornhat.org'
   ]
 };
 
-function getDomain(url) {
+function getBaseDomain(inputUrl) {
   try {
-    const u = new URL(url);
-    return u.hostname.replace('www.', '');
-  } catch {
-    return '';
+    const hostname = new URL(inputUrl).hostname;
+    for (const base in fallbackDomainMap) {
+      const variants = fallbackDomainMap[base];
+      if (hostname === base || variants.includes(hostname)) return base;
+    }
+    return hostname;
+  } catch (err) {
+    return null;
   }
 }
 
-function buildYtDlpCommand(url, cookiesPath) {
-  const args = [
+function getCookiesPath(url) {
+  const baseDomain = getBaseDomain(url);
+  const cookiesFile = `cookies/${baseDomain}.txt`;
+  return fs.existsSync(path.resolve(cookiesFile)) ? cookiesFile : null;
+}
+
+export async function fetchVideoInfo(url, proxy = null) {
+  const ytDlpPath = 'yt-dlp'; // assuming globally installed or set in PATH
+  const baseArgs = [
+    url,
     '--dump-json',
-    '--no-playlist',
     '--no-warnings',
-    '--restrict-filenames',
+    '--no-call-home',
     '--no-check-certificate',
-    '--ignore-errors',
-    `"${url}"`
+    '--no-playlist',
+    '--no-cache-dir',
+    '--restrict-filenames'
   ];
 
-  if (cookiesPath) {
-    args.unshift(`--cookies "${cookiesPath}"`);
+  const cookies = getCookiesPath(url);
+  if (cookies) {
+    baseArgs.push('--cookies', path.resolve(cookies));
   }
 
-  return `yt-dlp ${args.join(' ')}`;
-}
-
-async function runYtDlp(url, domain) {
-  const domainName = domain || getDomain(url);
-  const cookiesPath = path.resolve('cookies', `${domainName}.txt`);
-  const hasCookies = await fs.access(cookiesPath).then(() => true).catch(() => false);
-
-  const cmd = buildYtDlpCommand(url, hasCookies ? cookiesPath : null);
+  if (proxy) {
+    baseArgs.push('--proxy', proxy);
+  }
 
   try {
-    const { stdout } = await execPromise(cmd, { maxBuffer: 1024 * 1024 * 10 });
+    const { stdout } = await execFileAsync(ytDlpPath, baseArgs, { maxBuffer: 500 * 1024 * 1024 });
     return JSON.parse(stdout);
   } catch (err) {
-    return null;
+    throw new Error(err.stderr || err.message);
   }
-}
-
-async function puppeteerFallback(url) {
-  try {
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2' });
-    const content = await page.content();
-    await browser.close();
-
-    return {
-      title: 'Fallback Title',
-      duration: 0,
-      formats: [],
-      thumbnail: '',
-      htmlContent: content
-    };
-  } catch (err) {
-    return null;
-  }
-}
-
-export async function fetchVideoInfo(originalUrl) {
-  const domain = getDomain(originalUrl);
-  const fallbackList = fallbackDomains[domain] || [];
-
-  // Try original URL
-  let info = await runYtDlp(originalUrl);
-  if (info) return info;
-
-  // Try fallback domains
-  for (const altDomain of fallbackList) {
-    const altUrl = originalUrl.replace(domain, altDomain);
-    info = await runYtDlp(altUrl, altDomain);
-    if (info) return info;
-  }
-
-  // Try Puppeteer fallback
-  info = await puppeteerFallback(originalUrl);
-  return info;
 }
