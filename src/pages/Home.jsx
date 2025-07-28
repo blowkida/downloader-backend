@@ -22,7 +22,7 @@ export default function Home() {
     }, 100);
 
     try {
-      const response = await fetch('http://localhost:3000/api/download/api/download', {
+      const response = await fetch('https://downloader-backend-98nj.onrender.com/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
@@ -74,7 +74,7 @@ export default function Home() {
 
       <header className="bg-orange-400 backdrop-blur-md fixed top-0 left-0 w-full z-50 px-6 py-4 shadow-sm flex justify-between items-center">
         <div className="flex items-center space-x-3">
-          <img src="/ss-youtube-logo.png" alt="Logo" className="w-8 h-8" alt="SS YouTube Logo"/>
+          <img src="/ss-youtube-logo.png" alt="Logo" className="w-8 h-8"/>
           <span className="text-xl font-bold text-orange-600">SS YouTube</span>
           <span className="text-xs text-gray-500">V1.0</span>
         </div>
