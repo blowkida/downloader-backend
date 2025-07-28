@@ -8,7 +8,7 @@ export default function Home() {
   const [videoInfo, setVideoInfo] = useState(null);
   const [error, setError] = useState(null);
   const [showDonate, setShowDonate] = useState(false);
-
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const handleDownload = async () => {
     if (!url) return alert('Please enter a valid URL.');
 
@@ -73,19 +73,42 @@ export default function Home() {
       {showDonate && <DonatePopup onClose={() => setShowDonate(false)} />}
 
       <header className="bg-orange-400 backdrop-blur-md fixed top-0 left-0 w-full z-50 px-6 py-4 shadow-sm flex justify-between items-center">
-        <div className="flex items-center space-x-3">
-          <img src="/ss-youtube-logo.png" alt="Logo" className="w-8 h-8"/>
-          <span className="text-xl font-bold text-orange-600">SS YouTube</span>
-          <span className="text-xs text-gray-500">V1.0</span>
-        </div>
-        <nav className="space-x-6 text-sm font-medium text-white">
-          <a href="#">ADDED SITES</a>
-          <button onClick={() => setShowDonate(true)}>DONATE</button>
-          <a href="#">SUPPORT</a>
-          <a href="#">SETTINGS</a>
-        </nav>
-      </header>
+  {/* Logo + Version */}
+  <div className="flex items-center space-x-3">
+    <img src="/ss-youtube-logo.png" alt="Logo" className="w-8 h-8" />
+    <span className="text-lg font-bold text-orange-600">SS YouTube</span>
+    <span className="text-xs text-gray-100 hidden sm:inline">V1.0</span>
+  </div>
 
+  {/* Desktop Nav */}
+  <nav className="hidden sm:flex space-x-6 text-sm font-medium text-white">
+    <a href="#">ADDED SITES</a>
+    <button onClick={() => setShowDonate(true)}>DONATE</button>
+    <a href="#">SUPPORT</a>
+    <a href="#">SETTINGS</a>
+  </nav>
+
+  {/* Mobile Menu Button */}
+  <div className="sm:hidden">
+    <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="focus:outline-none">
+      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="2"
+        viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round"
+          d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+    </button>
+  </div>
+
+  {/* Mobile Dropdown Menu */}
+  {mobileMenuOpen && (
+    <div className="absolute top-full right-6 mt-2 w-48 bg-white rounded-md shadow-lg p-3 flex flex-col space-y-2 text-sm font-medium text-gray-700 sm:hidden z-50">
+      <a href="#">ADDED SITES</a>
+      <button onClick={() => setShowDonate(true)}>DONATE</button>
+      <a href="#">SUPPORT</a>
+      <a href="#">SETTINGS</a>
+    </div>
+  )}
+</header>
       <main className="pt-28 flex flex-col items-center justify-center flex-1 px-4 py-10 bg-orange-500">
         <h1 className="text-3xl font-bold text-gray-100 mb-2">YouTube Video Downloader</h1>
         <p className="text-sm text-gray-900 mb-2">Paste any video URL to download</p>
