@@ -74,7 +74,7 @@ export default function Home() {
 
       <header className="bg-orange-400 backdrop-blur-md fixed top-0 left-0 w-full z-50 px-6 py-4 shadow-sm flex justify-between items-center">
         <div className="flex items-center space-x-3">
-          <img src="/ss-youtube-logo.png" alt="Logo" className="w-8 h-8" />
+          <img src="/ss-youtube-logo.png" alt="Logo" className="w-8 h-8" alt="SS YouTube Logo"/>
           <span className="text-xl font-bold text-orange-600">SS YouTube</span>
           <span className="text-xs text-gray-500">V1.0</span>
         </div>
