@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import DonatePopup from '../components/DonatePopup';
 
 export default function Home() {
   const [url, setUrl] = useState('');
@@ -6,6 +7,7 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const [videoInfo, setVideoInfo] = useState(null);
   const [error, setError] = useState(null);
+  const [showDonate, setShowDonate] = useState(false);
 
   const handleDownload = async () => {
     if (!url) return alert('Please enter a valid URL.');
@@ -16,18 +18,13 @@ export default function Home() {
     setVideoInfo(null);
 
     const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 95) return prev;
-        return prev + 1;
-      });
+      setProgress((prev) => (prev >= 95 ? prev : prev + 1));
     }, 100);
 
     try {
-      const response = await fetch('https://downloader-backend-2.onrender.com/api/download', {
+      const response = await fetch('hhttps://downloader-backend-2.onrender.com/api/download', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
       });
 
@@ -36,12 +33,25 @@ export default function Home() {
       setProgress(100);
       setLoading(false);
 
-      if (data.success) {
-        setVideoInfo(data.video);
+      if (response.ok && data.title && data.formats) {
+        // Transform format fields
+        const formats = data.formats.map((f) => ({
+          quality: f.quality || f.format_note || 'Unknown',
+          size: f.filesize || f.filesize_approx || 'Unknown',
+          url: f.url,
+          type: 'video'
+        }));
+
+        setVideoInfo({
+          title: data.title,
+          thumbnail: data.thumbnail,
+          duration: data.duration + ' seconds',
+          formats
+        });
       } else {
         setError(data.error || 'Failed to fetch video info');
       }
-    } catch (err) {
+    } catch {
       clearInterval(interval);
       setProgress(0);
       setLoading(false);
@@ -60,39 +70,42 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-orange-50 flex flex-col justify-between">
-      <header className="bg-white border-b px-6 py-4 shadow-sm flex justify-between items-center">
+      {showDonate && <DonatePopup onClose={() => setShowDonate(false)} />}
+
+      <header className="bg-orange-400 backdrop-blur-md fixed top-0 left-0 w-full z-50 px-6 py-4 shadow-sm flex justify-between items-center">
         <div className="flex items-center space-x-3">
-          <img src="/logo.png" alt="Logo" className="w-8 h-8" />
-          <span className="text-xl font-bold text-orange-600">Link Downloader</span>
+          <img src="/ss-youtube-logo.png" alt="Logo" className="w-8 h-8" />
+          <span className="text-xl font-bold text-orange-600">SS YouTube</span>
           <span className="text-xs text-gray-500">V1.0</span>
         </div>
-        <nav className="space-x-6 text-sm font-medium text-gray-700">
+        <nav className="space-x-6 text-sm font-medium text-white">
           <a href="#">ADDED SITES</a>
-          <a href="#">DONATE</a>
+          <button onClick={() => setShowDonate(true)}>DONATE</button>
           <a href="#">SUPPORT</a>
           <a href="#">SETTINGS</a>
         </nav>
       </header>
 
-      <main className="flex flex-col items-center justify-center flex-1 px-4 py-10">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2"># Online Video Download Helper #</h1>
-        <p className="text-sm text-orange-500 mb-6">Paste any video URL to download</p>
+      <main className="pt-28 flex flex-col items-center justify-center flex-1 px-4 py-10 bg-orange-500">
+        <h1 className="text-3xl font-bold text-gray-100 mb-2">YouTube Video Downloader</h1>
+        <p className="text-sm text-gray-900 mb-2">Paste any video URL to download</p>
 
         <div className="w-full max-w-2xl flex gap-2">
           <input
             type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="Search or enter any URL to download"
-            className="flex-grow px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+            placeholder="Paste any video URL to download"
+            className="flex-grow px-4 py-3 border border-red-900 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
           />
           <button
             onClick={handleDownload}
-            className="px-6 py-3 bg-orange-500 text-white font-semibold rounded-md shadow-md hover:bg-orange-600"
+            className="px-6 py-3 bg-green-600 text-white font-semibold rounded-md shadow-md hover:bg-red-600"
           >
             DOWNLOAD
           </button>
         </div>
+        <p className="text-xl text-gray-100 mb-2">It's 100% Safe & Free to Use.</p>
 
         {loading && (
           <div className="mt-6 w-full max-w-md">
@@ -156,7 +169,8 @@ export default function Home() {
           <a href="#">Request a website?</a>
           <a href="#">Learn how to use?</a>
         </div>
-        <p className="text-xs text-gray-400 mt-2">&copy; 2025 Link Downloader. All rights reserved.</p>
+        <p className="text-xs text-gray-400 mt-2">&copy; 2025 SS-YouTube. All rights reserved.</p>
+        <p className="text-xs text-gray-400 mt-2">Designed and Developed By Manish Singh</p>
       </footer>
     </div>
   );
