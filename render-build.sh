@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 
-# Install yt-dlp globally on Render
-apt-get update && apt-get install -y curl
+#!/usr/bin/env bash
 
-# Download latest yt-dlp binary
+# Update packages
+apt-get update
+
+# Install ffmpeg and curl
+apt-get install -y curl ffmpeg
+
+# Install yt-dlp globally
 curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
 
-# Make it executable
+# Make yt-dlp executable
 chmod a+rx /usr/local/bin/yt-dlp
 
-echo "✅ yt-dlp installed globally"
+# Confirm versions
+yt-dlp --version
+ffmpeg -version
+
+echo "✅ yt-dlp and ffmpeg installed globally"
