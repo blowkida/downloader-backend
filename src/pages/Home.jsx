@@ -47,6 +47,7 @@ export default function Home() {
         body: JSON.stringify({ url }),
         mode: 'cors',
         credentials: 'include'
+        
       });
 
       const data = await response.json();
