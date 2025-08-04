@@ -13,8 +13,8 @@ const __dirname = path.dirname(__filename);
 
 // Configure yt-dlp path based on environment
 const isProduction = process.env.NODE_ENV === 'production';
-const ytdlpPath = '/tmp/bin/yt-dlp';
-const ffmpegPath = '/tmp/bin/ffmpeg';
+const ytDlpPath = isProduction ? '/tmp/bin/yt-dlp' : './yt-dlp.exe';
+const ffmpegPath = isProduction ? '/tmp/bin/ffmpeg' : 'ffmpeg';
 
 // Check if yt-dlp exists and is executable
 if (isProduction) {

@@ -1,7 +1,12 @@
 // ytDlpHelper.js
 import ytdlpFactory from 'yt-dlp-exec';
 import fs from "fs";
-const ytdlp = ytdlpFactory.create('/tmp/bin/yt-dlp'); // Global yt-dlp binary path
+
+// Determine yt-dlp binary path based on environment
+const isProduction = process.env.NODE_ENV === 'production';
+const ytDlpBinaryPath = isProduction ? '/tmp/bin/yt-dlp' : './yt-dlp.exe';
+console.log('Initializing yt-dlp with path:', ytDlpBinaryPath);
+const ytdlp = ytdlpFactory.create(ytDlpBinaryPath); // Global yt-dlp binary path
 
 function formatDuration(seconds) {
   if (!seconds) return "0:00";
@@ -71,13 +76,13 @@ export default async function fetchVideoInfo(url) {
     console.log('Using ytdlpOptions:', JSON.stringify(ytdlpOptions, null, 2));
     console.log('Using cookies file:', cookiesExist ? cookiesPath : 'No cookies file found');
 
-    // Get yt-dlp path based on environment
-    const isProduction = process.env.NODE_ENV === 'production';
-    const ytDlpPath = isProduction ? '/tmp/bin/yt-dlp' : './yt-dlp.exe';
-    console.log('Using yt-dlp path:', ytDlpPath);
+    // Log the yt-dlp path being used for this request
+    console.log('Using yt-dlp path for this request:', ytDlpBinaryPath);
 
     try {
-      let videoInfo = await ytdlp(url, ytdlpOptions);
+      // Add binary path to options
+      const options = { ...ytdlpOptions, binaryPath: ytDlpBinaryPath };
+      let videoInfo = await ytdlp(url, options);
       
       // Log the entire videoInfo object for debugging
       console.log('Video info extracted successfully');
