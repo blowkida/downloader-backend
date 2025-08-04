@@ -3,8 +3,7 @@ services:
     name: downloader-backend
     env: node
     buildCommand: |
-      apt-get update && apt-get install -y curl
-      curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o yt-dlp
-      chmod +x yt-dlp
+      chmod +x render-build.sh
+      ./render-build.sh
       npm install
     startCommand: npm start

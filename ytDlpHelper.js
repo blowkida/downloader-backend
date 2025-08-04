@@ -1,6 +1,7 @@
 // ytDlpHelper.js
-import ytdlp from "yt-dlp-exec";
+import ytdlpFactory from 'yt-dlp-exec';
 import fs from "fs";
+const ytdlp = ytdlpFactory.create('/usr/local/bin/yt-dlp'); // Global yt-dlp binary path
 
 function formatDuration(seconds) {
   if (!seconds) return "0:00";
@@ -35,6 +36,10 @@ export default async function fetchVideoInfo(url) {
     const cookiesPath = './youtube-cookies.txt';
     const cookiesExist = fs.existsSync(cookiesPath);
     
+    // Check if proxy URL is defined in environment variables
+    const proxyUrl = process.env.PROXY_URL;
+    console.log('Proxy URL from env:', proxyUrl);
+    
     // Use a configuration focused on getting all formats including audio and video with audio
     // Prioritize MP4 formats and avoid m3u8 formats
     const ytdlpOptions = {
@@ -57,8 +62,19 @@ export default async function fetchVideoInfo(url) {
       addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36']
     };
     
+    // Add proxy if available
+    if (proxyUrl) {
+      console.log('Using proxy:', proxyUrl);
+      ytdlpOptions.proxy = proxyUrl;
+    }
+    
     console.log('Using ytdlpOptions:', JSON.stringify(ytdlpOptions, null, 2));
     console.log('Using cookies file:', cookiesExist ? cookiesPath : 'No cookies file found');
+
+    // Get yt-dlp path based on environment
+    const isProduction = process.env.NODE_ENV === 'production';
+    const ytDlpPath = isProduction ? '/usr/local/bin/yt-dlp' : './yt-dlp.exe';
+    console.log('Using yt-dlp path:', ytDlpPath);
 
     try {
       let videoInfo = await ytdlp(url, ytdlpOptions);

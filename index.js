@@ -5,6 +5,25 @@ import ytdlp from "yt-dlp-exec";
 import path from "path";
 import fs from "fs";
 import fetchVideoInfo from "./ytDlpHelper.js";
+import { fileURLToPath } from 'url';
+
+// Get current directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Configure yt-dlp path based on environment
+const isProduction = process.env.NODE_ENV === 'production';
+const ytDlpPath = isProduction ? '/usr/local/bin/yt-dlp' : './yt-dlp.exe';
+
+// Check if yt-dlp exists and is executable
+if (isProduction) {
+  try {
+    fs.accessSync(ytDlpPath, fs.constants.X_OK);
+    console.log(`yt-dlp found at ${ytDlpPath} and is executable`);
+  } catch (err) {
+    console.error(`Error accessing yt-dlp at ${ytDlpPath}:`, err);
+  }
+}
 
 // Load environment variables
 dotenv.config();
@@ -98,7 +117,7 @@ app.post("/api/download/merged", async (req, res) => {
           
           // Execute yt-dlp to download and merge the video
           console.log(`Executing yt-dlp with options: ${JSON.stringify(ytdlpDownloadOptions, null, 2)}`);
-          await ytdlp(url, ytdlpDownloadOptions);
+          await ytdlp(url, { ...ytdlpDownloadOptions, binaryPath: ytDlpPath });
           console.log('Video downloaded and merged to:', outputFilename);
           
           // Check if the file was created successfully
@@ -131,7 +150,7 @@ app.post("/api/download/merged", async (req, res) => {
             
             // Execute yt-dlp to download just the video
             console.log(`Executing fallback yt-dlp with options: ${JSON.stringify(fallbackOptions, null, 2)}`);
-            await ytdlp(url, fallbackOptions);
+            await ytdlp(url, { ...fallbackOptions, binaryPath: ytDlpPath });
             console.log('Video downloaded without merging to:', fallbackOutputFilename);
             
             // Check if the fallback file was created successfully

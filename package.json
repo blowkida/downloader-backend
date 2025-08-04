@@ -10,5 +10,8 @@
     "dotenv": "^16.3.1",
     "express": "^4.21.2",
     "yt-dlp-exec": "^1.0.2"
-  }
+  },
+  "render": {
+  "buildScript": "./render-build.sh"
+}
 }
