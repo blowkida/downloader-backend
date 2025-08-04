@@ -148,7 +148,8 @@ app.post("/api/download/merged", async (req, res) => {
         }
         
         // Serve the file directly
-        const mergedUrl = `http://localhost:${PORT}/temp/${path.basename(outputFilename)}`;
+        const baseUrl = process.env.NODE_ENV === 'production' ? 'https://downloader-backend-bc1x.onrender.com' : `http://localhost:${PORT}`;
+        const mergedUrl = `${baseUrl}/temp/${path.basename(outputFilename)}`;
         console.log('Serving merged file from:', mergedUrl);
         
         // Create a URL object to add parameters
