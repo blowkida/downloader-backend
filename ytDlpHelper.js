@@ -6,10 +6,44 @@ import path from "path";
 // Check if we're running in production (Render.com)
 const isProduction = process.env.NODE_ENV === 'production';
 
+// Define primary and fallback binary directories
+const primaryBinDir = '/usr/local/bin';
+const fallbackBinDir = '/tmp/bin';
+
 // Define paths for yt-dlp and FFmpeg in production
-const ytDlpPath = isProduction ? '/tmp/bin/yt-dlp' : undefined;
-const ffmpegPath = isProduction ? '/tmp/bin/ffmpeg' : undefined;
-const ffprobePath = isProduction ? '/tmp/bin/ffprobe' : undefined;
+// Check primary directory first, then fallback to /tmp/bin
+let ytDlpPath, ffmpegPath, ffprobePath;
+
+if (isProduction) {
+  // Check if binaries exist in primary directory first
+  if (fs.existsSync(`${primaryBinDir}/yt-dlp`)) {
+    ytDlpPath = `${primaryBinDir}/yt-dlp`;
+  } else if (fs.existsSync(`${fallbackBinDir}/yt-dlp`)) {
+    ytDlpPath = `${fallbackBinDir}/yt-dlp`;
+  } else {
+    ytDlpPath = undefined;
+  }
+  
+  if (fs.existsSync(`${primaryBinDir}/ffmpeg`)) {
+    ffmpegPath = `${primaryBinDir}/ffmpeg`;
+  } else if (fs.existsSync(`${fallbackBinDir}/ffmpeg`)) {
+    ffmpegPath = `${fallbackBinDir}/ffmpeg`;
+  } else {
+    ffmpegPath = undefined;
+  }
+  
+  if (fs.existsSync(`${primaryBinDir}/ffprobe`)) {
+    ffprobePath = `${primaryBinDir}/ffprobe`;
+  } else if (fs.existsSync(`${fallbackBinDir}/ffprobe`)) {
+    ffprobePath = `${fallbackBinDir}/ffprobe`;
+  } else {
+    ffprobePath = undefined;
+  }
+} else {
+  ytDlpPath = undefined;
+  ffmpegPath = undefined;
+  ffprobePath = undefined;
+}
 
 // Log paths for debugging
 if (isProduction) {
@@ -75,8 +109,12 @@ export default async function fetchVideoInfo(url) {
     
     // If in production, specify FFmpeg path and yt-dlp path
     if (isProduction) {
-      ytdlpOptions.ffmpegLocation = '/tmp/bin/ffmpeg';
-      ytdlpOptions.binPath = '/tmp/bin/yt-dlp';
+      if (ffmpegPath) {
+        ytdlpOptions.ffmpegLocation = ffmpegPath;
+      }
+      if (ytDlpPath) {
+        ytdlpOptions.binPath = ytDlpPath;
+      }
     }
     
     console.log('Using ytdlpOptions:', JSON.stringify(ytdlpOptions, null, 2));
@@ -86,8 +124,12 @@ export default async function fetchVideoInfo(url) {
       // In production, specify the binary path
       if (isProduction) {
         console.log('Using yt-dlp binary path:', ytDlpPath);
-        ytdlpOptions.binaryPath = ytDlpPath;
-        ytdlpOptions.ffmpegLocation = ffmpegPath;
+        if (ytDlpPath) {
+          ytdlpOptions.binaryPath = ytDlpPath;
+        }
+        if (ffmpegPath) {
+          ytdlpOptions.ffmpegLocation = ffmpegPath;
+        }
       }
       
       let videoInfo = await ytdlp(url, ytdlpOptions);

@@ -43,69 +43,471 @@ app.use('/temp', express.static(tempDir));
 
 // Function to ensure yt-dlp is available
 async function ensureYtDlp() {
-  // In production (Render), the render-build.sh script should download yt-dlp to /tmp/bin/
-  // But we need to handle the case where the app starts before the script completes
+  // In production (Render), the render-build.sh script should download yt-dlp to /usr/local/bin/ or /tmp/bin/
   if (isProduction) {
-    const ytDlpPath = '/tmp/bin/yt-dlp';
-    const ffmpegPath = '/tmp/bin/ffmpeg';
-    const setupFlagPath = '/tmp/bin/setup_complete';
+    // Define primary and fallback binary directories
+    const primaryBinDir = '/usr/local/bin';
+    const fallbackBinDir = '/tmp/bin';
     
-    // Check if setup_complete flag exists
-    if (fs.existsSync(setupFlagPath)) {
-      console.log('yt-dlp and FFmpeg already set up');
+    // Define paths for binaries and setup flags
+    const primaryYtDlpPath = `${primaryBinDir}/yt-dlp`;
+    const primaryFfmpegPath = `${primaryBinDir}/ffmpeg`;
+    const primarySetupFlagPath = `${primaryBinDir}/setup_complete`;
+    
+    const fallbackYtDlpPath = `${fallbackBinDir}/yt-dlp`;
+    const fallbackFfmpegPath = `${fallbackBinDir}/ffmpeg`;
+    const fallbackSetupFlagPath = `${fallbackBinDir}/setup_complete`;
+    
+    const tmpSetupFlagPath = '/tmp/setup_complete';
+    
+    // Check if binaries exist in primary directory
+    const primaryYtDlpExists = fs.existsSync(primaryYtDlpPath);
+    const primaryFfmpegExists = fs.existsSync(primaryFfmpegPath);
+    
+    // Check if binaries exist in fallback directory
+    const fallbackYtDlpExists = fs.existsSync(fallbackYtDlpPath);
+    const fallbackFfmpegExists = fs.existsSync(fallbackFfmpegPath);
+    
+    // Check if setup flag exists in any location
+    const setupFlagExists = fs.existsSync(primarySetupFlagPath) || 
+                           fs.existsSync(fallbackSetupFlagPath) || 
+                           fs.existsSync(tmpSetupFlagPath);
+    
+    console.log('Checking setup flag in all locations:');
+    console.log(`- ${primarySetupFlagPath}: ${fs.existsSync(primarySetupFlagPath) ? 'Found' : 'Not found'}`);
+    console.log(`- ${fallbackSetupFlagPath}: ${fs.existsSync(fallbackSetupFlagPath) ? 'Found' : 'Not found'}`);
+    console.log(`- ${tmpSetupFlagPath}: ${fs.existsSync(tmpSetupFlagPath) ? 'Found' : 'Not found'}`);
+    console.log(`- Combined result: ${setupFlagExists ? 'Setup flag found' : 'No setup flag found'}`);
+
+    console.log('Checking binary availability:');
+    console.log(`- Primary yt-dlp (${primaryYtDlpPath}): ${primaryYtDlpExists ? 'Found' : 'Not found'}`);
+    console.log(`- Primary FFmpeg (${primaryFfmpegPath}): ${primaryFfmpegExists ? 'Found' : 'Not found'}`);
+    console.log(`- Fallback yt-dlp (${fallbackYtDlpPath}): ${fallbackYtDlpExists ? 'Found' : 'Not found'}`);
+    console.log(`- Fallback FFmpeg (${fallbackFfmpegPath}): ${fallbackFfmpegExists ? 'Found' : 'Not found'}`);
+    
+    // If binaries exist in either location, we're good to go
+    const ytDlpExists = primaryYtDlpExists || fallbackYtDlpExists;
+    const ffmpegExists = primaryFfmpegExists || fallbackFfmpegExists;
+    
+    if (ytDlpExists && ffmpegExists) {
+      console.log('yt-dlp and FFmpeg are available');
+      
+      // Create setup flag if it doesn't exist
+      if (!setupFlagExists) {
+        // Try primary directory first
+        try {
+          fs.writeFileSync(primarySetupFlagPath, 'setup complete');
+          console.log(`Created setup complete flag in ${primaryBinDir}`);
+        } catch (primaryError) {
+          console.warn(`Could not create setup flag in ${primaryBinDir}:`, primaryError.message);
+          
+          // Try fallback directory
+          try {
+            fs.writeFileSync(fallbackSetupFlagPath, 'setup complete');
+            console.log(`Created setup complete flag in ${fallbackBinDir}`);
+          } catch (fallbackError) {
+            console.warn(`Could not create setup flag in ${fallbackBinDir}:`, fallbackError.message);
+            
+            // Try /tmp as last resort
+            try {
+              fs.writeFileSync(tmpSetupFlagPath, 'setup complete');
+              console.log('Created setup complete flag in /tmp');
+            } catch (tmpError) {
+              console.warn('Could not create setup flag in /tmp either:', tmpError.message);
+              // Continue anyway since binaries exist
+            }
+          }
+        }
+      }
+      
       return;
     }
     
-    // Wait for yt-dlp to be available (max 30 seconds)
-    console.log('Waiting for yt-dlp to be available...');
-    let attempts = 0;
-    const maxAttempts = 30;
-    
-    while (attempts < maxAttempts) {
-      if (fs.existsSync(ytDlpPath) && fs.existsSync(ffmpegPath)) {
-        console.log('yt-dlp and FFmpeg found!');
-        return;
-      }
-      
-      console.log(`Waiting for yt-dlp... (attempt ${attempts + 1}/${maxAttempts})`);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
-      attempts++;
-    }
+    // No waiting loop - immediately proceed to manual setup if binaries not found
     
     // If we're here, we need to set up yt-dlp and FFmpeg ourselves
-    console.log('yt-dlp or FFmpeg not found after waiting, setting up manually...');
+    console.log('yt-dlp or FFmpeg not found, setting up manually...');
     
     try {
-      // Create directory if it doesn't exist
-      if (!fs.existsSync('/tmp/bin')) {
-        fs.mkdirSync('/tmp/bin', { recursive: true });
+      // Define primary and fallback binary directories
+      const primaryBinDir = '/usr/local/bin';
+      const fallbackBinDir = '/tmp/bin';
+      
+      // Create directories if they don't exist
+      let primaryDirCreated = false;
+      let fallbackDirCreated = false;
+      
+      // Try to create primary directory first
+      try {
+        await execAsync(`sudo mkdir -p ${primaryBinDir}`);
+        await execAsync(`sudo chmod 755 ${primaryBinDir}`);
+        console.log(`Created ${primaryBinDir} directory`);
+        primaryDirCreated = true;
+      } catch (primaryDirError) {
+        console.error(`Failed to create ${primaryBinDir} directory:`, primaryDirError.message);
+        console.log('Will attempt to use fallback directory');
       }
       
-      // Download yt-dlp
-      await execAsync('curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /tmp/bin/yt-dlp');
-      await execAsync('chmod +x /tmp/bin/yt-dlp');
-      console.log('yt-dlp downloaded and made executable');
-      
-      // Download FFmpeg (only if needed)
-      if (!fs.existsSync('/tmp/bin/ffmpeg')) {
-        console.log('Downloading FFmpeg...');
-        await execAsync('curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ffmpeg.tar.xz');
-        await execAsync('mkdir -p /tmp/ffmpeg');
-        await execAsync('tar xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg --strip-components=1');
-        await execAsync('cp /tmp/ffmpeg/ffmpeg /tmp/bin/');
-        await execAsync('cp /tmp/ffmpeg/ffprobe /tmp/bin/');
-        await execAsync('chmod +x /tmp/bin/ffmpeg');
-        await execAsync('chmod +x /tmp/bin/ffprobe');
-        await execAsync('rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg');
-        console.log('FFmpeg downloaded and made executable');
+      // Always try to create fallback directory
+      if (!fs.existsSync(fallbackBinDir)) {
+        try {
+          fs.mkdirSync(fallbackBinDir, { recursive: true });
+          console.log(`Created ${fallbackBinDir} directory`);
+          fallbackDirCreated = true;
+        } catch (fallbackDirError) {
+          console.error(`Failed to create ${fallbackBinDir} directory:`, fallbackDirError.message);
+          
+          if (!primaryDirCreated) {
+            console.error('Failed to create both binary directories, will attempt to use existing directories');
+          }
+        }
+      } else {
+        fallbackDirCreated = true;
       }
       
-      // Create flag file
-      fs.writeFileSync(setupFlagPath, 'setup complete');
-      console.log('Setup complete flag created');
+      // Install yt-dlp if needed
+      const primaryYtDlpPath = `${primaryBinDir}/yt-dlp`;
+      const fallbackYtDlpPath = `${fallbackBinDir}/yt-dlp`;
+      
+      if (!fs.existsSync(primaryYtDlpPath) && !fs.existsSync(fallbackYtDlpPath)) {
+        console.log('Installing yt-dlp...');
+        let ytDlpInstalled = false;
+        
+        // First attempt - direct download to primary directory
+        if (primaryDirCreated) {
+          try {
+            await execAsync(`sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ${primaryYtDlpPath}`);
+            await execAsync(`sudo chmod +x ${primaryYtDlpPath}`);
+            console.log(`yt-dlp downloaded to ${primaryBinDir} and made executable`);
+            
+            // Verify yt-dlp works
+            try {
+              const { stdout } = await execAsync(`${primaryYtDlpPath} --version`);
+              console.log('yt-dlp version:', stdout.trim());
+              ytDlpInstalled = true;
+              
+              // Create a copy in fallback directory for compatibility
+              if (fallbackDirCreated) {
+                await execAsync(`cp ${primaryYtDlpPath} ${fallbackYtDlpPath} || ln -sf ${primaryYtDlpPath} ${fallbackYtDlpPath}`);
+                await execAsync(`chmod +x ${fallbackYtDlpPath}`);
+                console.log(`Created copy of yt-dlp in ${fallbackBinDir} for compatibility`);
+              }
+            } catch (verifyError) {
+              console.warn('yt-dlp verification failed:', verifyError.message);
+            }
+          } catch (primaryDlError) {
+            console.error(`Failed to download yt-dlp to ${primaryBinDir}:`, primaryDlError.message);
+          }
+        }
+        
+        // Second attempt - direct download to fallback directory
+        if (!ytDlpInstalled && fallbackDirCreated) {
+          try {
+            await execAsync(`curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ${fallbackYtDlpPath}`);
+            await execAsync(`chmod +x ${fallbackYtDlpPath}`);
+            console.log(`yt-dlp downloaded to ${fallbackBinDir} and made executable`);
+            
+            // Verify yt-dlp works
+            try {
+              const { stdout } = await execAsync(`${fallbackYtDlpPath} --version`);
+              console.log('yt-dlp version:', stdout.trim());
+              ytDlpInstalled = true;
+              
+              // Try to create a copy in primary directory
+              if (primaryDirCreated) {
+                try {
+                  await execAsync(`sudo cp ${fallbackYtDlpPath} ${primaryYtDlpPath} || sudo ln -sf ${fallbackYtDlpPath} ${primaryYtDlpPath}`);
+                  await execAsync(`sudo chmod +x ${primaryYtDlpPath}`);
+                  console.log(`Created copy of yt-dlp in ${primaryBinDir}`);
+                } catch (copyError) {
+                  console.warn(`Failed to copy yt-dlp to ${primaryBinDir}:`, copyError.message);
+                }
+              }
+            } catch (verifyError) {
+              console.warn('yt-dlp verification failed:', verifyError.message);
+            }
+          } catch (fallbackDlError) {
+            console.error(`Failed to download yt-dlp to ${fallbackBinDir}:`, fallbackDlError.message);
+          }
+        }
+        
+        // Third attempt - download to current directory then move
+        if (!ytDlpInstalled) {
+          try {
+            console.log('Trying to download yt-dlp to current directory...');
+            await execAsync('curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ./yt-dlp');
+            await execAsync('chmod +x ./yt-dlp');
+            
+            // Try to copy to primary directory first
+            if (primaryDirCreated) {
+              try {
+                await execAsync(`sudo cp ./yt-dlp ${primaryYtDlpPath} || sudo mv ./yt-dlp ${primaryYtDlpPath}`);
+                await execAsync(`sudo chmod +x ${primaryYtDlpPath}`);
+                console.log(`yt-dlp copied to ${primaryBinDir}`);
+                ytDlpInstalled = true;
+                
+                // Create a copy in fallback directory for compatibility
+                if (fallbackDirCreated) {
+                  await execAsync(`cp ${primaryYtDlpPath} ${fallbackYtDlpPath} || ln -sf ${primaryYtDlpPath} ${fallbackYtDlpPath}`);
+                  await execAsync(`chmod +x ${fallbackYtDlpPath}`);
+                  console.log(`Created copy of yt-dlp in ${fallbackBinDir} for compatibility`);
+                }
+              } catch (primaryMoveError) {
+                console.error(`Failed to copy yt-dlp to ${primaryBinDir}:`, primaryMoveError.message);
+              }
+            }
+            
+            // Try fallback directory if primary failed
+            if (!ytDlpInstalled && fallbackDirCreated) {
+              try {
+                await execAsync(`cp ./yt-dlp ${fallbackYtDlpPath} || mv ./yt-dlp ${fallbackYtDlpPath}`);
+                await execAsync(`chmod +x ${fallbackYtDlpPath}`);
+                console.log(`yt-dlp copied to ${fallbackBinDir}`);
+                ytDlpInstalled = true;
+              } catch (fallbackMoveError) {
+                console.error(`Failed to copy yt-dlp to ${fallbackBinDir}:`, fallbackMoveError.message);
+              }
+            }
+          } catch (localDlError) {
+            console.error('Failed to download yt-dlp to current directory:', localDlError.message);
+          }
+        }
+              ytDlpInstalled = true;
+            } catch (moveError) {
+              console.error('Failed to move yt-dlp to /tmp/bin:', moveError.message);
+            }
+          } catch (localDlError) {
+            console.error('Failed to download yt-dlp to current directory:', localDlError.message);
+          }
+          
+          // Third attempt - try using npm to install yt-dlp globally
+          if (!ytDlpInstalled) {
+            try {
+              console.log('Trying to install yt-dlp via npm...');
+              await execAsync('npm install -g yt-dlp');
+              console.log('yt-dlp installed via npm');
+              
+              // Try to find the global installation and link it
+              try {
+                const { stdout: npmBinPath } = await execAsync('npm bin -g');
+                const globalYtDlpPath = path.join(npmBinPath.trim(), 'yt-dlp');
+                
+                if (fs.existsSync(globalYtDlpPath)) {
+                  console.log(`Found global yt-dlp at ${globalYtDlpPath}`);
+                  
+                  // Try to copy to primary directory first
+                  if (primaryDirCreated) {
+                    try {
+                      await execAsync(`sudo cp ${globalYtDlpPath} ${primaryYtDlpPath} || sudo ln -sf ${globalYtDlpPath} ${primaryYtDlpPath}`);
+                      await execAsync(`sudo chmod +x ${primaryYtDlpPath}`);
+                      console.log(`Created copy or symlink of yt-dlp in ${primaryBinDir}`);
+                      ytDlpInstalled = true;
+                      
+                      // Create a copy in fallback directory for compatibility
+                      if (fallbackDirCreated) {
+                        await execAsync(`cp ${primaryYtDlpPath} ${fallbackYtDlpPath} || ln -sf ${primaryYtDlpPath} ${fallbackYtDlpPath}`);
+                        await execAsync(`chmod +x ${fallbackYtDlpPath}`);
+                        console.log(`Created copy of yt-dlp in ${fallbackBinDir} for compatibility`);
+                      }
+                    } catch (primaryLinkError) {
+                      console.error(`Failed to create copy or symlink to ${primaryBinDir}:`, primaryLinkError.message);
+                    }
+                  }
+                  
+                  // Try fallback directory if primary failed
+                  if (!ytDlpInstalled && fallbackDirCreated) {
+                    try {
+                      await execAsync(`cp ${globalYtDlpPath} ${fallbackYtDlpPath} || ln -sf ${globalYtDlpPath} ${fallbackYtDlpPath}`);
+                      await execAsync(`chmod +x ${fallbackYtDlpPath}`);
+                      console.log(`Created copy or symlink of yt-dlp in ${fallbackBinDir}`);
+                      ytDlpInstalled = true;
+                    } catch (fallbackLinkError) {
+                      console.error(`Failed to create copy or symlink to ${fallbackBinDir}:`, fallbackLinkError.message);
+                    }
+                  }
+                }
+              } catch (npmBinError) {
+                console.error('Failed to find npm global bin path:', npmBinError.message);
+              }
+            } catch (npmError) {
+              console.error('Failed to install yt-dlp via npm:', npmError.message);
+            }
+          }
+        }
+        
+        if (!ytDlpInstalled) {
+          console.warn('All yt-dlp installation methods failed, but will continue execution');
+          // Don't throw an error, let the application continue and handle errors during download
+        }
+      }
+      
+      // Install FFmpeg if needed
+      const primaryFfmpegPath = `${primaryBinDir}/ffmpeg`;
+      const primaryFfprobePath = `${primaryBinDir}/ffprobe`;
+      const fallbackFfmpegPath = `${fallbackBinDir}/ffmpeg`;
+      const fallbackFfprobePath = `${fallbackBinDir}/ffprobe`;
+      
+      if ((!fs.existsSync(primaryFfmpegPath) && !fs.existsSync(fallbackFfmpegPath)) || 
+          (!fs.existsSync(primaryFfprobePath) && !fs.existsSync(fallbackFfprobePath))) {
+        console.log('Installing FFmpeg...');
+        let ffmpegInstalled = false;
+        
+        try {
+          // First attempt - download to /tmp
+          await execAsync('curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ffmpeg.tar.xz');
+          await execAsync('mkdir -p /tmp/ffmpeg');
+          await execAsync('tar xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg --strip-components=1');
+          
+          // Try to copy to primary directory first
+          if (primaryDirCreated) {
+            try {
+              await execAsync(`sudo cp /tmp/ffmpeg/ffmpeg ${primaryFfmpegPath}`);
+              await execAsync(`sudo cp /tmp/ffmpeg/ffprobe ${primaryFfprobePath}`);
+              await execAsync(`sudo chmod +x ${primaryFfmpegPath} ${primaryFfprobePath}`);
+              console.log(`FFmpeg and FFprobe copied to ${primaryBinDir}`);
+              ffmpegInstalled = true;
+              
+              // Create copies in fallback directory for compatibility
+              if (fallbackDirCreated) {
+                await execAsync(`cp ${primaryFfmpegPath} ${fallbackFfmpegPath} || ln -sf ${primaryFfmpegPath} ${fallbackFfmpegPath}`);
+                await execAsync(`cp ${primaryFfprobePath} ${fallbackFfprobePath} || ln -sf ${primaryFfprobePath} ${fallbackFfprobePath}`);
+                await execAsync(`chmod +x ${fallbackFfmpegPath} ${fallbackFfprobePath}`);
+                console.log(`Created copies of FFmpeg and FFprobe in ${fallbackBinDir} for compatibility`);
+              }
+            } catch (primaryCopyError) {
+              console.error(`Failed to copy FFmpeg to ${primaryBinDir}:`, primaryCopyError.message);
+            }
+          }
+          
+          // Try fallback directory if primary failed or wasn't created
+          if (!ffmpegInstalled && fallbackDirCreated) {
+            try {
+              await execAsync(`cp /tmp/ffmpeg/ffmpeg ${fallbackFfmpegPath}`);
+              await execAsync(`cp /tmp/ffmpeg/ffprobe ${fallbackFfprobePath}`);
+              await execAsync(`chmod +x ${fallbackFfmpegPath} ${fallbackFfprobePath}`);
+              console.log(`FFmpeg and FFprobe copied to ${fallbackBinDir}`);
+              ffmpegInstalled = true;
+            } catch (fallbackCopyError) {
+              console.error(`Failed to copy FFmpeg to ${fallbackBinDir}:`, fallbackCopyError.message);
+            }
+          }
+          
+          // Clean up temporary files
+          await execAsync('rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg');
+          
+          // Verify FFmpeg works
+          if (ffmpegInstalled) {
+            try {
+              // Try to verify from primary directory first
+              if (fs.existsSync(primaryFfmpegPath)) {
+                const { stdout } = await execAsync(`${primaryFfmpegPath} -version`);
+                console.log('FFmpeg version info:', stdout.split('\n')[0]);
+              } else if (fs.existsSync(fallbackFfmpegPath)) {
+                const { stdout } = await execAsync(`${fallbackFfmpegPath} -version`);
+                console.log('FFmpeg version info:', stdout.split('\n')[0]);
+              }
+            } catch (verifyError) {
+              console.warn('FFmpeg verification failed:', verifyError.message);
+            }
+          }
+        } catch (ffmpegError) {
+          console.error('Failed to download or extract FFmpeg:', ffmpegError.message);
+        
+        if (!ffmpegInstalled) {
+          console.warn('FFmpeg installation failed, but will continue execution');
+          // Don't throw an error, let the application continue and handle errors during download
+        }
+      }
+        
+        if (!ffmpegInstalled) {
+          console.warn('FFmpeg installation failed, but will continue execution');
+          // Don't throw an error, let the application continue and handle errors during download
+        }
+      }
+      
+      // Create a flag file to indicate setup is complete
+      try {
+        // Try to create flag in primary directory first
+        if (primaryDirCreated) {
+          try {
+            await execAsync(`sudo bash -c 'echo "Setup completed successfully" > ${primaryBinDir}/setup_complete'`);
+            console.log(`Created setup_complete flag in ${primaryBinDir}`);
+          } catch (primaryFlagError) {
+            console.error(`Failed to create setup_complete flag in ${primaryBinDir}:`, primaryFlagError.message);
+            
+            // Try fallback directory
+            if (fallbackDirCreated) {
+              try {
+                fs.writeFileSync(`${fallbackBinDir}/setup_complete`, 'Setup completed successfully');
+                console.log(`Created setup_complete flag in ${fallbackBinDir}`);
+              } catch (fallbackFlagError) {
+                console.error(`Failed to create setup_complete flag in ${fallbackBinDir}:`, fallbackFlagError.message);
+                
+                // Try /tmp as last resort
+                try {
+                  fs.writeFileSync('/tmp/setup_complete', 'Setup completed successfully');
+                  console.log('Created setup_complete flag in /tmp');
+                } catch (tmpFlagError) {
+                  console.error('Failed to create setup_complete flag in /tmp:', tmpFlagError.message);
+                }
+              }
+            } else {
+              // Try /tmp directly if fallback directory wasn't created
+              try {
+                fs.writeFileSync('/tmp/setup_complete', 'Setup completed successfully');
+                console.log('Created setup_complete flag in /tmp');
+              } catch (tmpFlagError) {
+                console.error('Failed to create setup_complete flag in /tmp:', tmpFlagError.message);
+              }
+            }
+          }
+        } else if (fallbackDirCreated) {
+          // Try fallback directory if primary wasn't created
+          try {
+            fs.writeFileSync(`${fallbackBinDir}/setup_complete`, 'Setup completed successfully');
+            console.log(`Created setup_complete flag in ${fallbackBinDir}`);
+          } catch (fallbackFlagError) {
+            console.error(`Failed to create setup_complete flag in ${fallbackBinDir}:`, fallbackFlagError.message);
+            
+            // Try /tmp as last resort
+            try {
+              fs.writeFileSync('/tmp/setup_complete', 'Setup completed successfully');
+              console.log('Created setup_complete flag in /tmp');
+            } catch (tmpFlagError) {
+              console.error('Failed to create setup_complete flag in /tmp:', tmpFlagError.message);
+            }
+          }
+        } else {
+          // Try /tmp directly if neither directory was created
+          try {
+            fs.writeFileSync('/tmp/setup_complete', 'Setup completed successfully');
+            console.log('Created setup_complete flag in /tmp');
+          } catch (tmpFlagError) {
+            console.error('Failed to create setup_complete flag in /tmp:', tmpFlagError.message);
+          }
+        }
+      } catch (error) {
+        console.error('Error creating setup_complete flag:', error.message);
+      }
+      
+      // Update PATH to include both directories
+      process.env.PATH = `${primaryBinDir}:${fallbackBinDir}:${process.env.PATH}`;
+      console.log(`Updated PATH to include ${primaryBinDir} and ${fallbackBinDir}`);
+      
+      // Set FFmpeg paths for child processes, prioritizing primary directory
+      if (fs.existsSync(primaryFfmpegPath)) {
+        process.env.FFMPEG_PATH = primaryFfmpegPath;
+        process.env.FFPROBE_PATH = primaryFfprobePath;
+        console.log(`Set FFMPEG_PATH to ${primaryFfmpegPath} and FFPROBE_PATH to ${primaryFfprobePath}`);
+      } else if (fs.existsSync(fallbackFfmpegPath)) {
+        process.env.FFMPEG_PATH = fallbackFfmpegPath;
+        process.env.FFPROBE_PATH = fallbackFfprobePath;
+        console.log(`Set FFMPEG_PATH to ${fallbackFfmpegPath} and FFPROBE_PATH to ${fallbackFfprobePath}`);
+      }
     } catch (error) {
       console.error('Error setting up yt-dlp or FFmpeg:', error);
-      throw new Error('Failed to set up yt-dlp or FFmpeg');
+      console.log('Application will continue, but video downloads may fail');
+      // Don't throw error here, let the application continue and handle errors during download
     }
   }
 }
