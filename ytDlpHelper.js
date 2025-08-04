@@ -75,6 +75,8 @@ export default async function fetchVideoInfo(url) {
       // Log the entire videoInfo object for debugging
       console.log('Video info extracted successfully');
       console.log('Video info type:', typeof videoInfo);
+      console.log('Raw videoInfo:', videoInfo);
+
       
       // If videoInfo is a string, try to parse it as JSON
       if (typeof videoInfo === 'string') {
