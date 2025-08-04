@@ -16,13 +16,27 @@ const isProduction = process.env.NODE_ENV === 'production';
 const ytDlpPath = isProduction ? '/tmp/bin/yt-dlp' : './yt-dlp.exe';
 const ffmpegPath = isProduction ? '/tmp/bin/ffmpeg' : 'ffmpeg';
 
-// Check if yt-dlp exists and is executable
+// Check if yt-dlp exists and is executable, but don't crash if it doesn't
+// It will be created during deployment by render-build.sh
+let ytDlpAvailable = false;
+let ffmpegAvailable = false;
 if (isProduction) {
   try {
     fs.accessSync(ytDlpPath, fs.constants.X_OK);
     console.log(`yt-dlp found at ${ytDlpPath} and is executable`);
+    ytDlpAvailable = true;
   } catch (err) {
-    console.error(`Error accessing yt-dlp at ${ytDlpPath}:`, err);
+    console.warn(`yt-dlp not yet available at ${ytDlpPath} - this is normal during deployment: ${err.message}`);
+    console.log('The application will continue to start up. yt-dlp will be checked again when needed.');
+  }
+  
+  try {
+    fs.accessSync(ffmpegPath, fs.constants.X_OK);
+    console.log(`ffmpeg found at ${ffmpegPath} and is executable`);
+    ffmpegAvailable = true;
+  } catch (err) {
+    console.warn(`ffmpeg not yet available at ${ffmpegPath} - this is normal during deployment: ${err.message}`);
+    console.log('The application will continue to start up. ffmpeg will be checked again when needed.');
   }
 }
 
@@ -118,6 +132,30 @@ app.post("/api/download/merged", async (req, res) => {
           
           // Execute yt-dlp to download and merge the video
           console.log(`Executing yt-dlp with options: ${JSON.stringify(ytdlpDownloadOptions, null, 2)}`);
+          
+          // Check if yt-dlp and ffmpeg are available now (they might have been installed since startup)
+          if (!ytDlpAvailable && isProduction) {
+            try {
+              fs.accessSync(ytDlpPath, fs.constants.X_OK);
+              console.log(`yt-dlp is now available at ${ytDlpPath}`);
+              ytDlpAvailable = true;
+            } catch (err) {
+              console.warn(`yt-dlp still not available at ${ytDlpPath}: ${err.message}`);
+              console.log('Will attempt to use it anyway, but this may fail...');
+            }
+          }
+          
+          if (!ffmpegAvailable && isProduction) {
+            try {
+              fs.accessSync(ffmpegPath, fs.constants.X_OK);
+              console.log(`ffmpeg is now available at ${ffmpegPath}`);
+              ffmpegAvailable = true;
+            } catch (err) {
+              console.warn(`ffmpeg still not available at ${ffmpegPath}: ${err.message}`);
+              console.log('Will attempt to use it anyway, but merging may fail...');
+            }
+          }
+          
           await ytdlp(url, { ...ytdlpDownloadOptions, binaryPath: ytDlpPath });
           console.log('Video downloaded and merged to:', outputFilename);
           
@@ -151,6 +189,19 @@ app.post("/api/download/merged", async (req, res) => {
             
             // Execute yt-dlp to download just the video
             console.log(`Executing fallback yt-dlp with options: ${JSON.stringify(fallbackOptions, null, 2)}`);
+            
+            // Check again if yt-dlp is available now (it might have been installed since last check)
+            if (!ytDlpAvailable && isProduction) {
+              try {
+                fs.accessSync(ytDlpPath, fs.constants.X_OK);
+                console.log(`yt-dlp is now available at ${ytDlpPath} for fallback download`);
+                ytDlpAvailable = true;
+              } catch (err) {
+                console.warn(`yt-dlp still not available at ${ytDlpPath} for fallback: ${err.message}`);
+                console.log('Will attempt fallback download anyway, but this may fail...');
+              }
+            }
+            
             await ytdlp(url, { ...fallbackOptions, binaryPath: ytDlpPath });
             console.log('Video downloaded without merging to:', fallbackOutputFilename);
             
