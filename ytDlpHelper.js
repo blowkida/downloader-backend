@@ -1,7 +1,7 @@
 // ytDlpHelper.js
 import ytdlpFactory from 'yt-dlp-exec';
 import fs from "fs";
-const ytdlp = ytdlpFactory.create('/usr/local/bin/yt-dlp'); // Global yt-dlp binary path
+const ytdlp = ytdlpFactory.create('/tmp/bin/yt-dlp'); // Global yt-dlp binary path
 
 function formatDuration(seconds) {
   if (!seconds) return "0:00";
@@ -73,7 +73,7 @@ export default async function fetchVideoInfo(url) {
 
     // Get yt-dlp path based on environment
     const isProduction = process.env.NODE_ENV === 'production';
-    const ytDlpPath = isProduction ? '/usr/local/bin/yt-dlp' : './yt-dlp.exe';
+    const ytDlpPath = isProduction ? '/tmp/bin/yt-dlp' : './yt-dlp.exe';
     console.log('Using yt-dlp path:', ytDlpPath);
 
     try {
