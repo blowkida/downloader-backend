@@ -1,12 +1,9 @@
 // ytDlpHelper.js
-import ytdlpFactory from 'yt-dlp-exec';
+import ytdlp from "yt-dlp-exec";
 import fs from "fs";
 
-// Determine yt-dlp binary path based on environment
+// Check if we're running in production (Render.com)
 const isProduction = process.env.NODE_ENV === 'production';
-const ytDlpBinaryPath = isProduction ? '/tmp/bin/yt-dlp' : './yt-dlp.exe';
-console.log('Initializing yt-dlp with path:', ytDlpBinaryPath);
-const ytdlp = ytdlpFactory.create(ytDlpBinaryPath); // Global yt-dlp binary path
 
 function formatDuration(seconds) {
   if (!seconds) return "0:00";
@@ -41,10 +38,6 @@ export default async function fetchVideoInfo(url) {
     const cookiesPath = './youtube-cookies.txt';
     const cookiesExist = fs.existsSync(cookiesPath);
     
-    // Check if proxy URL is defined in environment variables
-    const proxyUrl = process.env.PROXY_URL;
-    console.log('Proxy URL from env:', proxyUrl);
-    
     // Use a configuration focused on getting all formats including audio and video with audio
     // Prioritize MP4 formats and avoid m3u8 formats
     const ytdlpOptions = {
@@ -67,22 +60,24 @@ export default async function fetchVideoInfo(url) {
       addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36']
     };
     
-    // Add proxy if available
-    if (proxyUrl) {
-      console.log('Using proxy:', proxyUrl);
-      ytdlpOptions.proxy = proxyUrl;
+    // If in production, specify FFmpeg path
+    if (isProduction) {
+      ytdlpOptions.ffmpegLocation = '/tmp/bin/ffmpeg';
+      
+      // Set binary path for yt-dlp in production
+      if (fs.existsSync('/tmp/bin/yt-dlp')) {
+        console.log('Using yt-dlp from /tmp/bin/yt-dlp');
+        ytdlp.setBinaryPath('/tmp/bin/yt-dlp');
+      } else {
+        console.log('Warning: /tmp/bin/yt-dlp not found, using system yt-dlp');
+      }
     }
     
     console.log('Using ytdlpOptions:', JSON.stringify(ytdlpOptions, null, 2));
     console.log('Using cookies file:', cookiesExist ? cookiesPath : 'No cookies file found');
 
-    // Log the yt-dlp path being used for this request
-    console.log('Using yt-dlp path for this request:', ytDlpBinaryPath);
-
     try {
-      // Add binary path to options
-      const options = { ...ytdlpOptions, binaryPath: ytDlpBinaryPath };
-      let videoInfo = await ytdlp(url, options);
+      let videoInfo = await ytdlp(url, ytdlpOptions);
       
       // Log the entire videoInfo object for debugging
       console.log('Video info extracted successfully');
@@ -452,4 +447,4 @@ export default async function fetchVideoInfo(url) {
     // Generic fallback error
     throw new Error("Failed to extract video information. Please check the URL and try again.");
   }
-}
+} 

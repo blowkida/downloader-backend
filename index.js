@@ -4,51 +4,23 @@ import dotenv from "dotenv";
 import ytdlp from "yt-dlp-exec";
 import path from "path";
 import fs from "fs";
+import { exec } from "child_process";
+import { promisify } from "util";
 import fetchVideoInfo from "./ytDlpHelper.js";
-import { fileURLToPath } from 'url';
 
-// Get current directory
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Configure yt-dlp path based on environment
-const isProduction = process.env.NODE_ENV === 'production';
-const ytDlpPath = isProduction ? '/tmp/bin/yt-dlp' : './yt-dlp.exe';
-const ffmpegPath = isProduction ? '/tmp/bin/ffmpeg' : 'ffmpeg';
-
-// Check if yt-dlp exists and is executable, but don't crash if it doesn't
-// It will be created during deployment by render-build.sh
-let ytDlpAvailable = false;
-let ffmpegAvailable = false;
-if (isProduction) {
-  try {
-    fs.accessSync(ytDlpPath, fs.constants.X_OK);
-    console.log(`yt-dlp found at ${ytDlpPath} and is executable`);
-    ytDlpAvailable = true;
-  } catch (err) {
-    console.warn(`yt-dlp not yet available at ${ytDlpPath} - this is normal during deployment: ${err.message}`);
-    console.log('The application will continue to start up. yt-dlp will be checked again when needed.');
-  }
-  
-  try {
-    fs.accessSync(ffmpegPath, fs.constants.X_OK);
-    console.log(`ffmpeg found at ${ffmpegPath} and is executable`);
-    ffmpegAvailable = true;
-  } catch (err) {
-    console.warn(`ffmpeg not yet available at ${ffmpegPath} - this is normal during deployment: ${err.message}`);
-    console.log('The application will continue to start up. ffmpeg will be checked again when needed.');
-  }
-}
+// Promisify exec
+const execAsync = promisify(exec);
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const isProduction = process.env.NODE_ENV === 'production';
 
 // Configure CORS with specific options
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://downloader-frontend.onrender.com'],
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
   methods: ['GET', 'POST', 'OPTIONS'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Accept', 'Authorization']
@@ -68,6 +40,88 @@ if (!fs.existsSync(tempDir)) {
 
 // Serve static files from the temp directory
 app.use('/temp', express.static(tempDir));
+
+// Function to ensure yt-dlp is available
+async function ensureYtDlp() {
+  // In production (Render), the render-build.sh script should download yt-dlp to /tmp/bin/
+  // But we need to handle the case where the app starts before the script completes
+  if (isProduction) {
+    const ytDlpPath = '/tmp/bin/yt-dlp';
+    const ffmpegPath = '/tmp/bin/ffmpeg';
+    const setupFlagPath = '/tmp/bin/setup_complete';
+    
+    // Check if setup_complete flag exists
+    if (fs.existsSync(setupFlagPath)) {
+      console.log('yt-dlp and FFmpeg already set up');
+      return;
+    }
+    
+    // Wait for yt-dlp to be available (max 30 seconds)
+    console.log('Waiting for yt-dlp to be available...');
+    let attempts = 0;
+    const maxAttempts = 30;
+    
+    while (attempts < maxAttempts) {
+      if (fs.existsSync(ytDlpPath) && fs.existsSync(ffmpegPath)) {
+        console.log('yt-dlp and FFmpeg found!');
+        return;
+      }
+      
+      console.log(`Waiting for yt-dlp... (attempt ${attempts + 1}/${maxAttempts})`);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+      attempts++;
+    }
+    
+    // If we're here, we need to set up yt-dlp and FFmpeg ourselves
+    console.log('yt-dlp or FFmpeg not found after waiting, setting up manually...');
+    
+    try {
+      // Create directory if it doesn't exist
+      if (!fs.existsSync('/tmp/bin')) {
+        fs.mkdirSync('/tmp/bin', { recursive: true });
+      }
+      
+      // Download yt-dlp
+      await execAsync('curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /tmp/bin/yt-dlp');
+      await execAsync('chmod +x /tmp/bin/yt-dlp');
+      console.log('yt-dlp downloaded and made executable');
+      
+      // Download FFmpeg (only if needed)
+      if (!fs.existsSync('/tmp/bin/ffmpeg')) {
+        console.log('Downloading FFmpeg...');
+        await execAsync('curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ffmpeg.tar.xz');
+        await execAsync('mkdir -p /tmp/ffmpeg');
+        await execAsync('tar xf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg --strip-components=1');
+        await execAsync('cp /tmp/ffmpeg/ffmpeg /tmp/bin/');
+        await execAsync('cp /tmp/ffmpeg/ffprobe /tmp/bin/');
+        await execAsync('chmod +x /tmp/bin/ffmpeg');
+        await execAsync('chmod +x /tmp/bin/ffprobe');
+        await execAsync('rm -rf /tmp/ffmpeg.tar.xz /tmp/ffmpeg');
+        console.log('FFmpeg downloaded and made executable');
+      }
+      
+      // Create flag file
+      fs.writeFileSync(setupFlagPath, 'setup complete');
+      console.log('Setup complete flag created');
+    } catch (error) {
+      console.error('Error setting up yt-dlp or FFmpeg:', error);
+      throw new Error('Failed to set up yt-dlp or FFmpeg');
+    }
+  }
+}
+
+// Call this before starting the server
+ensureYtDlp().catch(error => {
+  console.error('Failed to ensure yt-dlp availability:', error);
+  // Continue starting the server even if setup fails - we'll handle errors on download requests
+});
+
+// Configure yt-dlp with paths if in production
+if (isProduction) {
+  // Update yt-dlp configuration to use specific paths
+  process.env.PATH = `/tmp/bin:${process.env.PATH}`;
+  ytdlp.setBinaryPath('/tmp/bin/yt-dlp');
+}
 
 app.post("/api/download", async (req, res) => {
   const { url } = req.body;
@@ -130,33 +184,14 @@ app.post("/api/download/merged", async (req, res) => {
             verbose: true
           };
           
+          // If in production, specify FFmpeg path
+          if (isProduction) {
+            ytdlpDownloadOptions.ffmpegLocation = '/tmp/bin/ffmpeg';
+          }
+          
           // Execute yt-dlp to download and merge the video
           console.log(`Executing yt-dlp with options: ${JSON.stringify(ytdlpDownloadOptions, null, 2)}`);
-          
-          // Check if yt-dlp and ffmpeg are available now (they might have been installed since startup)
-          if (!ytDlpAvailable && isProduction) {
-            try {
-              fs.accessSync(ytDlpPath, fs.constants.X_OK);
-              console.log(`yt-dlp is now available at ${ytDlpPath}`);
-              ytDlpAvailable = true;
-            } catch (err) {
-              console.warn(`yt-dlp still not available at ${ytDlpPath}: ${err.message}`);
-              console.log('Will attempt to use it anyway, but this may fail...');
-            }
-          }
-          
-          if (!ffmpegAvailable && isProduction) {
-            try {
-              fs.accessSync(ffmpegPath, fs.constants.X_OK);
-              console.log(`ffmpeg is now available at ${ffmpegPath}`);
-              ffmpegAvailable = true;
-            } catch (err) {
-              console.warn(`ffmpeg still not available at ${ffmpegPath}: ${err.message}`);
-              console.log('Will attempt to use it anyway, but merging may fail...');
-            }
-          }
-          
-          await ytdlp(url, { ...ytdlpDownloadOptions, binaryPath: ytDlpPath });
+          await ytdlp(url, ytdlpDownloadOptions);
           console.log('Video downloaded and merged to:', outputFilename);
           
           // Check if the file was created successfully
@@ -187,22 +222,14 @@ app.post("/api/download/merged", async (req, res) => {
               verbose: true
             };
             
-            // Execute yt-dlp to download just the video
-            console.log(`Executing fallback yt-dlp with options: ${JSON.stringify(fallbackOptions, null, 2)}`);
-            
-            // Check again if yt-dlp is available now (it might have been installed since last check)
-            if (!ytDlpAvailable && isProduction) {
-              try {
-                fs.accessSync(ytDlpPath, fs.constants.X_OK);
-                console.log(`yt-dlp is now available at ${ytDlpPath} for fallback download`);
-                ytDlpAvailable = true;
-              } catch (err) {
-                console.warn(`yt-dlp still not available at ${ytDlpPath} for fallback: ${err.message}`);
-                console.log('Will attempt fallback download anyway, but this may fail...');
-              }
+            // If in production, specify FFmpeg path
+            if (isProduction) {
+              fallbackOptions.ffmpegLocation = '/tmp/bin/ffmpeg';
             }
             
-            await ytdlp(url, { ...fallbackOptions, binaryPath: ytDlpPath });
+            // Execute yt-dlp to download just the video
+            console.log(`Executing fallback yt-dlp with options: ${JSON.stringify(fallbackOptions, null, 2)}`);
+            await ytdlp(url, fallbackOptions);
             console.log('Video downloaded without merging to:', fallbackOutputFilename);
             
             // Check if the fallback file was created successfully
@@ -219,8 +246,7 @@ app.post("/api/download/merged", async (req, res) => {
         }
         
         // Serve the file directly
-        const baseUrl = process.env.NODE_ENV === 'production' ? 'https://downloader-backend-bc1x.onrender.com' : `http://localhost:${PORT}`;
-        const mergedUrl = `${baseUrl}/temp/${path.basename(outputFilename)}`;
+        const mergedUrl = `http://localhost:${PORT}/temp/${path.basename(outputFilename)}`;
         console.log('Serving merged file from:', mergedUrl);
         
         // Create a URL object to add parameters
