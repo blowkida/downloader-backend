@@ -6,36 +6,28 @@ import path from "path";
 // Check if we're running in production (Render.com)
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Define primary and fallback binary directories
-const primaryBinDir = '/usr/local/bin';
-const fallbackBinDir = '/tmp/bin';
+// Define fallback binary directory
+const binDir = '/tmp/bin';
 
 // Define paths for yt-dlp and FFmpeg in production
-// Check primary directory first, then fallback to /tmp/bin
 let ytDlpPath, ffmpegPath, ffprobePath;
 
 if (isProduction) {
-  // Check if binaries exist in primary directory first
-  if (fs.existsSync(`${primaryBinDir}/yt-dlp`)) {
-    ytDlpPath = `${primaryBinDir}/yt-dlp`;
-  } else if (fs.existsSync(`${fallbackBinDir}/yt-dlp`)) {
-    ytDlpPath = `${fallbackBinDir}/yt-dlp`;
+  // Check if binaries exist
+  if (fs.existsSync(`${binDir}/yt-dlp`)) {
+    ytDlpPath = `${binDir}/yt-dlp`;
   } else {
     ytDlpPath = undefined;
   }
   
-  if (fs.existsSync(`${primaryBinDir}/ffmpeg`)) {
-    ffmpegPath = `${primaryBinDir}/ffmpeg`;
-  } else if (fs.existsSync(`${fallbackBinDir}/ffmpeg`)) {
-    ffmpegPath = `${fallbackBinDir}/ffmpeg`;
+  if (fs.existsSync(`${binDir}/ffmpeg`)) {
+    ffmpegPath = `${binDir}/ffmpeg`;
   } else {
     ffmpegPath = undefined;
   }
   
-  if (fs.existsSync(`${primaryBinDir}/ffprobe`)) {
-    ffprobePath = `${primaryBinDir}/ffprobe`;
-  } else if (fs.existsSync(`${fallbackBinDir}/ffprobe`)) {
-    ffprobePath = `${fallbackBinDir}/ffprobe`;
+  if (fs.existsSync(`${binDir}/ffprobe`)) {
+    ffprobePath = `${binDir}/ffprobe`;
   } else {
     ffprobePath = undefined;
   }
