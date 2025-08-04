@@ -118,9 +118,10 @@ ensureYtDlp().catch(error => {
 
 // Configure yt-dlp with paths if in production
 if (isProduction) {
-  // Update yt-dlp configuration to use specific paths
+  // Update PATH environment variable to include /tmp/bin
   process.env.PATH = `/tmp/bin:${process.env.PATH}`;
-  ytdlp.setBinaryPath('/tmp/bin/yt-dlp');
+  
+  // yt-dlp-exec doesn't have setBinaryPath method, so we'll set options directly in the command calls
 }
 
 app.post("/api/download", async (req, res) => {
@@ -187,6 +188,8 @@ app.post("/api/download/merged", async (req, res) => {
           // If in production, specify FFmpeg path
           if (isProduction) {
             ytdlpDownloadOptions.ffmpegLocation = '/tmp/bin/ffmpeg';
+            // Use the binary directly from the PATH with custom binary path
+            ytdlpDownloadOptions.binPath = '/tmp/bin/yt-dlp';
           }
           
           // Execute yt-dlp to download and merge the video
@@ -225,6 +228,8 @@ app.post("/api/download/merged", async (req, res) => {
             // If in production, specify FFmpeg path
             if (isProduction) {
               fallbackOptions.ffmpegLocation = '/tmp/bin/ffmpeg';
+              // Use the binary directly from the PATH with custom binary path
+              fallbackOptions.binPath = '/tmp/bin/yt-dlp';
             }
             
             // Execute yt-dlp to download just the video

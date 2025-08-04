@@ -60,17 +60,10 @@ export default async function fetchVideoInfo(url) {
       addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36']
     };
     
-    // If in production, specify FFmpeg path
+    // If in production, specify FFmpeg path and yt-dlp path
     if (isProduction) {
       ytdlpOptions.ffmpegLocation = '/tmp/bin/ffmpeg';
-      
-      // Set binary path for yt-dlp in production
-      if (fs.existsSync('/tmp/bin/yt-dlp')) {
-        console.log('Using yt-dlp from /tmp/bin/yt-dlp');
-        ytdlp.setBinaryPath('/tmp/bin/yt-dlp');
-      } else {
-        console.log('Warning: /tmp/bin/yt-dlp not found, using system yt-dlp');
-      }
+      ytdlpOptions.binPath = '/tmp/bin/yt-dlp';
     }
     
     console.log('Using ytdlpOptions:', JSON.stringify(ytdlpOptions, null, 2));
@@ -447,4 +440,4 @@ export default async function fetchVideoInfo(url) {
     // Generic fallback error
     throw new Error("Failed to extract video information. Please check the URL and try again.");
   }
-} 
+}
