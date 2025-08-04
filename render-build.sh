@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 
-#!/usr/bin/env bash
+# Create temp binary directory
+mkdir -p /tmp/bin
 
-# Update packages
-apt-get update
+# Download yt-dlp
+echo "🔽 Downloading yt-dlp..."
+curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /tmp/bin/yt-dlp
+chmod +x /tmp/bin/yt-dlp
+echo "✅ yt-dlp installed at /tmp/bin/yt-dlp"
 
-# Install ffmpeg and curl
-apt-get install -y curl ffmpeg
+# Download static ffmpeg build
+echo "🔽 Downloading ffmpeg..."
+curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ffmpeg.tar.xz
+tar -xf /tmp/ffmpeg.tar.xz -C /tmp/
+mv /tmp/ffmpeg-*-amd64-static/ffmpeg /tmp/bin/ffmpeg
+chmod +x /tmp/bin/ffmpeg
+echo "✅ ffmpeg installed at /tmp/bin/ffmpeg"
 
-# Install yt-dlp globally
-curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
-
-# Make yt-dlp executable
-chmod a+rx /usr/local/bin/yt-dlp
-
-# Confirm versions
-yt-dlp --version
-ffmpeg -version
-
-echo "✅ yt-dlp and ffmpeg installed globally"
+# Export paths (so child_process or yt-dlp-exec can use them)
+export PATH="/tmp/bin:$PATH"
