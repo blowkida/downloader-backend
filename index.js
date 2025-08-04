@@ -120,6 +120,15 @@ ensureYtDlp().catch(error => {
 if (isProduction) {
   // Update PATH environment variable to include /tmp/bin
   process.env.PATH = `/tmp/bin:${process.env.PATH}`;
+  console.log('Updated PATH environment variable:', process.env.PATH);
+  
+  // Set environment variables for FFmpeg paths
+  process.env.FFMPEG_PATH = '/tmp/bin/ffmpeg';
+  process.env.FFPROBE_PATH = '/tmp/bin/ffprobe';
+  
+  // Log the paths for debugging
+  console.log('FFmpeg path:', process.env.FFMPEG_PATH);
+  console.log('FFprobe path:', process.env.FFPROBE_PATH);
   
   // yt-dlp-exec doesn't have setBinaryPath method, so we'll set options directly in the command calls
 }
@@ -189,7 +198,9 @@ app.post("/api/download/merged", async (req, res) => {
           if (isProduction) {
             ytdlpDownloadOptions.ffmpegLocation = '/tmp/bin/ffmpeg';
             // Use the binary directly from the PATH with custom binary path
-            ytdlpDownloadOptions.binPath = '/tmp/bin/yt-dlp';
+            ytdlpDownloadOptions.binaryPath = '/tmp/bin/yt-dlp';
+            console.log('Using yt-dlp binary path:', ytdlpDownloadOptions.binaryPath);
+            console.log('Using FFmpeg path:', ytdlpDownloadOptions.ffmpegLocation);
           }
           
           // Execute yt-dlp to download and merge the video
@@ -229,7 +240,9 @@ app.post("/api/download/merged", async (req, res) => {
             if (isProduction) {
               fallbackOptions.ffmpegLocation = '/tmp/bin/ffmpeg';
               // Use the binary directly from the PATH with custom binary path
-              fallbackOptions.binPath = '/tmp/bin/yt-dlp';
+              fallbackOptions.binaryPath = '/tmp/bin/yt-dlp';
+              console.log('Using fallback yt-dlp binary path:', fallbackOptions.binaryPath);
+              console.log('Using fallback FFmpeg path:', fallbackOptions.ffmpegLocation);
             }
             
             // Execute yt-dlp to download just the video

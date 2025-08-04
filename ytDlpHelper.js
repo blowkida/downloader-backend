@@ -1,9 +1,22 @@
 // ytDlpHelper.js
 import ytdlp from "yt-dlp-exec";
 import fs from "fs";
+import path from "path";
 
 // Check if we're running in production (Render.com)
 const isProduction = process.env.NODE_ENV === 'production';
+
+// Define paths for yt-dlp and FFmpeg in production
+const ytDlpPath = isProduction ? '/tmp/bin/yt-dlp' : undefined;
+const ffmpegPath = isProduction ? '/tmp/bin/ffmpeg' : undefined;
+const ffprobePath = isProduction ? '/tmp/bin/ffprobe' : undefined;
+
+// Log paths for debugging
+if (isProduction) {
+  console.log('Using yt-dlp path:', ytDlpPath);
+  console.log('Using FFmpeg path:', ffmpegPath);
+  console.log('Using FFprobe path:', ffprobePath);
+}
 
 function formatDuration(seconds) {
   if (!seconds) return "0:00";
@@ -70,6 +83,13 @@ export default async function fetchVideoInfo(url) {
     console.log('Using cookies file:', cookiesExist ? cookiesPath : 'No cookies file found');
 
     try {
+      // In production, specify the binary path
+      if (isProduction) {
+        console.log('Using yt-dlp binary path:', ytDlpPath);
+        ytdlpOptions.binaryPath = ytDlpPath;
+        ytdlpOptions.ffmpegLocation = ffmpegPath;
+      }
+      
       let videoInfo = await ytdlp(url, ytdlpOptions);
       
       // Log the entire videoInfo object for debugging

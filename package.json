@@ -3,7 +3,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "postinstall": "chmod +x render-build.sh && ./render-build.sh || echo 'Skipping render-build.sh in development'"
   },
   "dependencies": {
     "cors": "^2.8.5",

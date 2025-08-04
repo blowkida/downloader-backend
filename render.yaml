@@ -7,3 +7,8 @@ services:
       ./render-build.sh
       npm install
     startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PATH
+        value: /tmp/bin:$PATH
