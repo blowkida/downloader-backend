@@ -19,19 +19,17 @@ curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "$BI
 chmod +x "$BIN_DIR/yt-dlp"
 echo "✅ yt-dlp downloaded and made executable."
 
-# Ensure yt-dlp-exec can find the binary
-echo "🔗 Linking yt-dlp binary into yt-dlp-exec expected path..."
-mkdir -p ./node_modules/yt-dlp-exec/bin
-cp "$BIN_DIR/yt-dlp" ./node_modules/yt-dlp-exec/bin/yt-dlp
-chmod +x ./node_modules/yt-dlp-exec/bin/yt-dlp
-echo "✅ Linked yt-dlp to ./node_modules/yt-dlp-exec/bin/yt-dlp"
-
-# Optional: show version to verify success
-echo "📦 yt-dlp version:"
-"$BIN_DIR/yt-dlp" --version || echo "⚠️ Could not verify yt-dlp version"
-
-# Update PATH for runtime (optional)
+# Add the bin directory to PATH
 export PATH="$BIN_DIR:$PATH"
-echo "✅ Added $BIN_DIR to PATH"
+echo "export PATH=$BIN_DIR:$PATH" >> ~/.bashrc
 
-echo "✅ render-build.sh completed successfully."
+# Create temp directory
+echo "📁 Creating temp directory..."
+mkdir -p "./temp"
+chmod 755 "./temp"
+
+# Verify installations
+echo "🔍 Verifying installations..."
+which yt-dlp || echo "⚠️ yt-dlp not found in PATH"
+
+echo "✅ Build script completed successfully."

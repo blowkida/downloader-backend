@@ -119,7 +119,7 @@ app.post("/api/download/merged", async (req, res) => {
       
       try {
         // Generate a unique output filename with timestamp
-        let outputFilename = `./temp/${videoInfo.title.replace(/[\/\:*?"<>|]/g, '_')}_${Date.now()}.mp4`;
+        let outputFilename = `./temp/${videoInfo.title.replace(/[/\:*?"<>|]/g, '_')}_${Date.now()}.mp4`;
         
         // Always attempt to merge video and audio
         try {
@@ -158,7 +158,7 @@ app.post("/api/download/merged", async (req, res) => {
           console.log('Attempting fallback to direct video download without merging...');
           try {
             // Create fallback download options for best video format in MP4
-            const fallbackOutputFilename = `./temp/${videoInfo.title.replace(/[/\:*?"<>|]/g, '_')}_${Date.now()}_fallback.mp4`;
+            const fallbackOutputFilename = `./temp/${videoInfo.title.replace(/[\/\:*?"<>|]/g, '_')}_${Date.now()}_fallback.mp4`;
             const fallbackOptions = {
               // FIX: Include bestaudio in the fallback as well to make sure we get audio
               format: `bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`,
@@ -193,8 +193,13 @@ app.post("/api/download/merged", async (req, res) => {
           }
         }
         
-        // Serve the file directly
-        const mergedUrl = `http://localhost:${PORT}/temp/${path.basename(outputFilename)}`;
+        // Get the server's base URL from the request
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+        const host = req.headers['x-forwarded-host'] || req.headers.host;
+        const baseUrl = `${protocol}://${host}`;
+        
+        // Create the download URL using the server's base URL
+        const mergedUrl = `${baseUrl}/temp/${path.basename(outputFilename)}`;
         console.log('Serving merged file from:', mergedUrl);
         
         // Create a URL object to add parameters
@@ -230,7 +235,7 @@ app.post("/api/download/merged", async (req, res) => {
       
       // Add or update parameters for proper download
       urlObj.searchParams.set('title', videoInfo.title);
-      urlObj.searchParams.set('filename', `${videoInfo.title.replace(/[\/:*?"<>|]/g, '_')}.${requestedFormat.ext || 'mp3'}`);
+      urlObj.searchParams.set('filename', `${videoInfo.title.replace(/[\/\:*?"<>|]/g, '_')}.${requestedFormat.ext || 'mp3'}`);
       
       // Add a timestamp to prevent caching issues
       urlObj.searchParams.set('_t', Date.now());
