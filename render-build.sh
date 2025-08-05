@@ -42,17 +42,24 @@ else
   handle_error "yt-dlp installation verification failed"
 fi
 
-# Create symbolic link to /usr/local/bin if we have write access
-# This is a best-effort attempt, not critical for functionality
+# Create symbolic links for compatibility
+# First, always create a local symlink in the current directory
+echo "Creating local symlink in the current directory..."
+ln -sf "$BIN_DIR/yt-dlp" "./yt-dlp" || echo "Warning: Failed to create local symlink"
+
+# Then try to create a symlink in /usr/local/bin if possible
 echo "Attempting to create symbolic link in $USR_LOCAL_BIN (if possible)..."
 if [ -d "$USR_LOCAL_BIN" ] && [ -w "$USR_LOCAL_BIN" ]; then
   echo "$USR_LOCAL_BIN is writable, creating symlink"
   ln -sf "$BIN_DIR/yt-dlp" "$USR_LOCAL_BIN/yt-dlp" || echo "Warning: Failed to create symlink in $USR_LOCAL_BIN"
 else
   echo "$USR_LOCAL_BIN is not writable, skipping symlink creation"
-  # Create a local symlink in the current directory as fallback
-  ln -sf "$BIN_DIR/yt-dlp" "./yt-dlp" || echo "Warning: Failed to create local symlink"
 fi
+
+# Create a symlink in node_modules/.bin directory for yt-dlp-exec to find
+echo "Creating symlink in node_modules/.bin directory..."
+mkdir -p "./node_modules/.bin"
+ln -sf "$BIN_DIR/yt-dlp" "./node_modules/.bin/yt-dlp" || echo "Warning: Failed to create symlink in node_modules/.bin"
 
 # Update yt-dlp to ensure we have the latest version
 echo "Updating yt-dlp to latest version..."

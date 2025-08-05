@@ -14,11 +14,19 @@ const PORT = process.env.PORT || 5000;
 
 // Configure CORS with specific options
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://ssyoutube.netlify.app', 'https://ssyoutube.vercel.app', 'https://downloader-backend-bc1x.onrender.com'],
   methods: ['GET', 'POST', 'OPTIONS'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Accept', 'Authorization']
 }));
+
+// Allow all origins in development mode
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', req.headers.origin);
+    next();
+  });
+}
 
 // Add OPTIONS handling for preflight requests
 app.options('*', cors());

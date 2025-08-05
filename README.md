@@ -55,7 +55,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: PATH
-        value: $HOME/bin:/usr/local/bin:/usr/bin:$PATH
+        value: ./node_modules/.bin:$HOME/bin:.:/usr/local/bin:/usr/bin:$PATH
 ```
 
 ### Build Script
@@ -65,17 +65,25 @@ The `render-build.sh` script installs yt-dlp in the user's home directory (`$HOM
 1. Creates a bin directory in the user's home folder
 2. Downloads and installs yt-dlp to this directory
 3. Makes yt-dlp executable
-4. Adds the bin directory to the PATH
-5. Creates symlinks for compatibility if possible
+4. Creates multiple symlinks for maximum compatibility:
+   - In the current directory (`./yt-dlp`)
+   - In node_modules/.bin directory for yt-dlp-exec to find
+   - In /usr/local/bin if writable (best-effort attempt)
+5. Adds the bin directory to the PATH
+6. Updates yt-dlp to the latest version
 
 ## Troubleshooting
 
 If you encounter issues with yt-dlp in production:
 
 1. Check the logs to see if yt-dlp was downloaded and installed correctly
-2. Verify that the PATH environment variable includes `$HOME/bin`
+2. Verify that the PATH environment variable includes all necessary directories: `./node_modules/.bin:$HOME/bin:.:/usr/local/bin:/usr/bin`
 3. Make sure the `render-build.sh` script executed successfully during the build process
-4. Check if yt-dlp is accessible at `$HOME/bin/yt-dlp`
+4. Check if yt-dlp is accessible at one of these locations:
+   - `$HOME/bin/yt-dlp` (primary installation)
+   - `./yt-dlp` (local symlink)
+   - `./node_modules/.bin/yt-dlp` (symlink for yt-dlp-exec)
+   - `/usr/local/bin/yt-dlp` (system-wide symlink, if writable)
 
 ## API Endpoints
 
