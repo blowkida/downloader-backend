@@ -180,6 +180,8 @@ app.post("/api/download/merged", async (req, res) => {
             verbose: true
           };
           
+          console.log(`Using cookies file: ${cookiesExist ? cookiesPath : 'Not found, using browser cookies instead'}`);
+          
           // Execute yt-dlp to download and merge the video
           console.log(`Executing yt-dlp with options: ${JSON.stringify(ytdlpDownloadOptions, null, 2)}`);
           await ytdlp(url, ytdlpDownloadOptions);
@@ -214,6 +216,8 @@ app.post("/api/download/merged", async (req, res) => {
               // Adding verbose output for debugging
               verbose: true
             };
+            
+            console.log(`Using cookies file in fallback: ${cookiesExist ? cookiesPath : 'Not found, using browser cookies instead'}`);
             
             // Execute yt-dlp to download just the video
             console.log(`Executing fallback yt-dlp with options: ${JSON.stringify(fallbackOptions, null, 2)}`);

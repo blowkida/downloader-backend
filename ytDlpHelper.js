@@ -79,12 +79,19 @@ export default async function fetchVideoInfo(url) {
   return await runYtDlpWithErrorHandling(async () => {
 
   try {
-    // Check if cookies file exists
-    const cookiesPath = path.resolve('./youtube-cookies.txt');
+    // Check if cookies file exists - use absolute path resolution
+    const cookiesPath = path.resolve(process.cwd(), 'youtube-cookies.txt');
     const cookiesExist = fs.existsSync(cookiesPath);
     
     if (cookiesExist) {
       console.log(`Found cookies file at: ${cookiesPath}`);
+      // Log file permissions and size for debugging
+      try {
+        const stats = fs.statSync(cookiesPath);
+        console.log(`Cookies file size: ${stats.size} bytes, permissions: ${stats.mode.toString(8)}`);
+      } catch (err) {
+        console.error(`Error checking cookies file stats: ${err.message}`);
+      }
     } else {
       console.log(`Cookies file not found at: ${cookiesPath}`);
     }
@@ -190,6 +197,8 @@ export default async function fetchVideoInfo(url) {
           noCheckCertificate: true,
           format: 'best',
           skipDownload: true,
+          cookies: cookiesExist ? cookiesPath : null,
+          cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
           addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
         };
         
