@@ -1,14 +1,10 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { create } from "yt-dlp-exec";
+import ytdlp from "yt-dlp-exec";
 import path from "path";
 import fs from "fs";
 import fetchVideoInfo from "./ytDlpHelper.js";
-import { cleanupTempFiles } from "./cleanup.js";
-
-// Create ytdlp instance with system binary path instead of node_modules path
-const ytdlp = create(process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
 // Load environment variables
 dotenv.config();
@@ -123,7 +119,7 @@ app.post("/api/download/merged", async (req, res) => {
       
       try {
         // Generate a unique output filename with timestamp
-        let outputFilename = `./temp/${videoInfo.title.replace(/[/\:*?"<>|]/g, '_')}_${Date.now()}.mp4`;
+        let outputFilename = `./temp/${videoInfo.title.replace(/[\/\:*?"<>|]/g, '_')}_${Date.now()}.mp4`;
         
         // Always attempt to merge video and audio
         try {
@@ -162,7 +158,7 @@ app.post("/api/download/merged", async (req, res) => {
           console.log('Attempting fallback to direct video download without merging...');
           try {
             // Create fallback download options for best video format in MP4
-            const fallbackOutputFilename = `./temp/${videoInfo.title.replace(/[\/\:*?"<>|]/g, '_')}_${Date.now()}_fallback.mp4`;
+            const fallbackOutputFilename = `./temp/${videoInfo.title.replace(/[/\:*?"<>|]/g, '_')}_${Date.now()}_fallback.mp4`;
             const fallbackOptions = {
               // FIX: Include bestaudio in the fallback as well to make sure we get audio
               format: `bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`,
@@ -197,13 +193,10 @@ app.post("/api/download/merged", async (req, res) => {
           }
         }
         
-        // Get the server's base URL from the request
-        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-        const host = req.headers['x-forwarded-host'] || req.headers.host;
-        const baseUrl = `${protocol}://${host}`;
-        
-        // Create the download URL using the server's base URL
-        const mergedUrl = `${baseUrl}/temp/${path.basename(outputFilename)}`;
+        // Serve the file directly
+        const host = req.get('host');
+        const protocol = req.protocol;
+        const mergedUrl = `${protocol}://${host}/temp/${path.basename(outputFilename)}`;
         console.log('Serving merged file from:', mergedUrl);
         
         // Create a URL object to add parameters
@@ -239,7 +232,7 @@ app.post("/api/download/merged", async (req, res) => {
       
       // Add or update parameters for proper download
       urlObj.searchParams.set('title', videoInfo.title);
-      urlObj.searchParams.set('filename', `${videoInfo.title.replace(/[\/\:*?"<>|]/g, '_')}.${requestedFormat.ext || 'mp3'}`);
+      urlObj.searchParams.set('filename', `${videoInfo.title.replace(/[\/:*?"<>|]/g, '_')}.${requestedFormat.ext || 'mp3'}`);
       
       // Add a timestamp to prevent caching issues
       urlObj.searchParams.set('_t', Date.now());
@@ -265,16 +258,4 @@ app.post("/api/download/merged", async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  
-  // Run initial cleanup
-  cleanupTempFiles();
-  
-  // Schedule cleanup to run every 15 minutes
-  const CLEANUP_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
-  setInterval(() => {
-    console.log('Running scheduled temp file cleanup...');
-    cleanupTempFiles();
-  }, CLEANUP_INTERVAL_MS);
-  
-  console.log(`Temp file cleanup scheduled to run every 15 minutes`);
 });

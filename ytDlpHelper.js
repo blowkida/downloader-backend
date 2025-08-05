@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 // Create ytdlp instance with system binary path instead of node_modules path
+// This ensures we use the system-installed binary rather than expecting it in node_modules
 const ytdlp = create(process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
 // Create __dirname equivalent for ES modules
