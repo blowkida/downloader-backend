@@ -35,7 +35,7 @@ This is the backend server for the YouTube Downloader application. It provides A
 
 ## Production Deployment (Render.com)
 
-The application is configured for deployment on Render.com. The `render-build.sh` script automatically installs yt-dlp globally during the build process.
+The application is configured for deployment on Render.com. The `render-build.sh` script automatically installs yt-dlp during the build process.
 
 ### Deployment Configuration
 
@@ -55,21 +55,27 @@ services:
       - key: NODE_ENV
         value: production
       - key: PATH
-        value: /usr/local/bin:/usr/bin:$PATH
+        value: $HOME/bin:/usr/local/bin:/usr/bin:$PATH
 ```
 
 ### Build Script
 
-The `render-build.sh` script installs yt-dlp globally at `/usr/local/bin/yt-dlp` to ensure it's available to the application and persists across deployments.
+The `render-build.sh` script installs yt-dlp in the user's home directory (`$HOME/bin`) to ensure it's available to the application and persists across deployments. The script:
+
+1. Creates a bin directory in the user's home folder
+2. Downloads and installs yt-dlp to this directory
+3. Makes yt-dlp executable
+4. Adds the bin directory to the PATH
+5. Creates symlinks for compatibility if possible
 
 ## Troubleshooting
 
 If you encounter issues with yt-dlp in production:
 
 1. Check the logs to see if yt-dlp was downloaded and installed correctly
-2. Verify that the PATH environment variable includes `/usr/local/bin`
+2. Verify that the PATH environment variable includes `$HOME/bin`
 3. Make sure the `render-build.sh` script executed successfully during the build process
-4. Check if yt-dlp is accessible at `/usr/local/bin/yt-dlp`
+4. Check if yt-dlp is accessible at `$HOME/bin/yt-dlp`
 
 ## API Endpoints
 

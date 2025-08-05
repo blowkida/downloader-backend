@@ -11,4 +11,4 @@ services:
       - key: NODE_ENV
         value: production
       - key: PATH
-        value: /usr/local/bin:/usr/bin:$PATH
+        value: $HOME/bin:/usr/local/bin:/usr/bin:$PATH
