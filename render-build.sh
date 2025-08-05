@@ -8,13 +8,14 @@ mv yt-dlp /opt/render/project/src/yt-dlp
 
 echo "✅ yt-dlp installed at /opt/render/project/src/yt-dlp"
 
-echo "⬇️ Downloading cookies file from Google Drive..."
-# Replace the file ID with your file's actual ID
-curl -L -o youtube-cookies.txt "https://drive.google.com/uc?export=download&id=13_F3sWRws8XHFH-SQCmhBDdJNk9cP1gX"
-chmod 600 youtube-cookies.txt
-
-echo "✅ youtube-cookies.txt downloaded:"
-ls -l youtube-cookies.txt
+echo "🔍 Checking for youtube-cookies.txt..."
+if [ -f "youtube-cookies.txt" ]; then
+  chmod 600 youtube-cookies.txt
+  echo "✅ youtube-cookies.txt found and permissions set:"
+  ls -l youtube-cookies.txt
+else
+  echo "⚠️ youtube-cookies.txt not found. Using manually uploaded file."
+fi
 
 echo "📦 Installing npm dependencies..."
 npm install
