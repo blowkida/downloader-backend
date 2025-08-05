@@ -1,6 +1,7 @@
 import { create } from "yt-dlp-exec";
 import path from "path";
 import fs from "fs";
+import os from "os";
 
 // Determine the best path for yt-dlp binary
 let ytdlpBinaryPath = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
@@ -40,16 +41,32 @@ function formatFileSize(bytes) {
  * @returns {Promise<object>} - Video information object
  */
 async function fetchVideoInfo(url, cookiesPath = null) {
+  let tempCookieFile = null;
+  
   try {
     console.log(`[<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi>n</mi><mi>e</mi><mi>w</mi><mi>D</mi><mi>a</mi><mi>t</mi><mi>e</mi><mo stretchy="false">(</mo><mo stretchy="false">)</mo><mi mathvariant="normal">.</mi><mi>t</mi><mi>o</mi><mi>I</mi><mi>S</mi><mi>O</mi><mi>S</mi><mi>t</mi><mi>r</mi><mi>i</mi><mi>n</mi><mi>g</mi><mo stretchy="false">(</mo><mo stretchy="false">)</mo></mrow><mo stretchy="false">]</mo><mi>F</mi><mi>e</mi><mi>t</mi><mi>c</mi><mi>h</mi><mi>i</mi><mi>n</mi><mi>g</mi><mi>v</mi><mi>i</mi><mi>d</mi><mi>e</mi><mi>o</mi><mi>i</mi><mi>n</mi><mi>f</mi><mi>o</mi><mi>f</mi><mi>o</mi><mi>r</mi></mrow><annotation encoding="application/x-tex">{new Date().toISOString()}] Fetching video info for </annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="mord mathnormal">e</span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mord mathnormal" style="margin-right:0.02778em;">D</span><span class="mord mathnormal">a</span><span class="mord mathnormal">t</span><span class="mord mathnormal">e</span><span class="mopen">(</span><span class="mclose">)</span><span class="mord">.</span><span class="mord mathnormal">t</span><span class="mord mathnormal">o</span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mord mathnormal">SOSt</span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mord mathnormal">in</span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span><span class="mopen">(</span><span class="mclose">)</span></span><span class="mclose">]</span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mord mathnormal">e</span><span class="mord mathnormal">t</span><span class="mord mathnormal">c</span><span class="mord mathnormal">hin</span><span class="mord mathnormal" style="margin-right:0.03588em;">gv</span><span class="mord mathnormal">i</span><span class="mord mathnormal">d</span><span class="mord mathnormal">eo</span><span class="mord mathnormal">in</span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span><span class="mord mathnormal">o</span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span><span class="mord mathnormal" style="margin-right:0.02778em;">or</span></span></span></span>{url}`);
     
-    // Check multiple possible locations for cookies file if not provided
-    if (!cookiesPath) {
+    // Handle cookies - first try environment variable
+    if (process.env.COOKIES_CONTENT && !cookiesPath) {
+      console.log('Using cookies from environment variable');
+      try {
+        // Create temp file for cookies
+        tempCookieFile = path.join(os.tmpdir(), `youtube-cookies-${Date.now()}.txt`);
+        fs.writeFileSync(tempCookieFile, process.env.COOKIES_CONTENT);
+        cookiesPath = tempCookieFile;
+        console.log(`Created temporary cookies file at: ${cookiesPath}`);
+      } catch (err) {
+        console.error('Failed to write cookies from environment variable:', err);
+      }
+    }
+    
+    // Check file paths if no cookies found yet
+    if (!cookiesPath || !fs.existsSync(cookiesPath)) {
       const possibleCookiePaths = [
-        path.resolve('./youtube-cookies.txt'),                     // Current directory
-        path.resolve('/opt/render/project/src/youtube-cookies.txt'), // Render.com project directory
-        path.join(process.cwd(), 'youtube-cookies.txt'),           // Process working directory
-        '/youtube-cookies.txt',                                    // Root directory
+        './youtube-cookies.txt',                               // Local relative path
+        path.join(process.cwd(), 'youtube-cookies.txt'),       // Process working directory 
+        path.resolve('/opt/render/project/src/youtube-cookies.txt'), // Render.com path
+        '/youtube-cookies.txt',                                // Root directory
       ];
 
       for (const cookiePath of possibleCookiePaths) {
@@ -60,9 +77,8 @@ async function fetchVideoInfo(url, cookiesPath = null) {
         }
       }
       
-      if (!cookiesPath) {
+      if (!cookiesPath || !fs.existsSync(cookiesPath)) {
         console.warn('No cookies file found in any of the standard locations');
-        cookiesPath = possibleCookiePaths[0]; // Default to first path even if not found
       }
     }
     
@@ -83,11 +99,11 @@ async function fetchVideoInfo(url, cookiesPath = null) {
       console.log(`Using cookies file at: ${cookiesPath}`);
       options.cookies = cookiesPath;
     } else {
-      console.log(`Cookies file not found at: ${cookiesPath}, continuing without cookies`);
+      console.log(`No usable cookies file found, continuing without cookies`);
     }
     
     // Execute yt-dlp to get video info
-    console.log(`Executing yt-dlp with options: ${JSON.stringify(options, null, 2)}`);
+    console.log(`Executing yt-dlp with options: ${JSON.stringify({ ...options, cookies: options.cookies ? '[REDACTED]' : undefined }, null, 2)}`);
     const videoData = await ytdlp(url, options);
     
     if (!videoData) {
@@ -204,6 +220,16 @@ async function fetchVideoInfo(url, cookiesPath = null) {
     enhancedError.originalError = error;
     enhancedError.stderr = error.stderr;
     throw enhancedError;
+  } finally {
+    // Clean up temporary cookie file if created
+    if (tempCookieFile && fs.existsSync(tempCookieFile)) {
+      try {
+        fs.unlinkSync(tempCookieFile);
+        console.log(`Cleaned up temporary cookie file: ${tempCookieFile}`);
+      } catch (err) {
+        console.error(`Failed to clean up temporary cookie file: ${err.message}`);
+      }
+    }
   }
 }
 
