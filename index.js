@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 5000;
 
 // Configure CORS with specific options
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://ssyoutube.netlify.app', 'https://ssyoutube.vercel.app', 'https://downloader-backend-bc1x.onrender.com'],
+  origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://ssyoutube.netlify.app', 'https://ssyoutube.vercel.app', 'https://downloader-frontend.netlify.app', 'https://downloader-frontend.vercel.app', 'https://downloader-frontend.onrender.com', 'https://downloader-backend-bc1x.onrender.com'],
   methods: ['GET', 'POST', 'OPTIONS'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Accept', 'Authorization']
