@@ -5,6 +5,7 @@ services:
     buildCommand: |
       chmod +x render-build.sh
       ./render-build.sh
+      apt-get update && apt-get install -y ffmpeg
       npm install
     startCommand: npm start
     envVars:
