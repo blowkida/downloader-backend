@@ -13,7 +13,13 @@ chmod 755 "$BIN_DIR"
 
 # Download the latest yt-dlp binary from GitHub
 echo "⬇️ Downloading yt-dlp..."
-curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "$BIN_DIR/yt-dlp"
+
+# Try GitHub URL first
+if ! curl -L -f -S --retry 3 --retry-delay 3 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "$BIN_DIR/yt-dlp"; then
+  echo "⚠️ GitHub download failed, trying fallback URL..."
+  # Try fallback URL
+  curl -L -f -S --retry 3 --retry-delay 3 https://yt-dlp.org/latest/yt-dlp -o "$BIN_DIR/yt-dlp"
+fi
 
 # Make it executable
 chmod +x "$BIN_DIR/yt-dlp"

@@ -31,29 +31,88 @@ async function downloadYtDlp() {
   return new Promise((resolve, reject) => {
     console.log(`⬇️ Downloading ${ytDlpFileName}...`);
     
-    const url = isWindows 
+    // Primary GitHub URL
+    const githubUrl = isWindows 
       ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
       : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
     
+    // Fallback direct URL (if GitHub fails)
+    const fallbackUrl = isWindows
+      ? 'https://yt-dlp.org/latest/yt-dlp.exe'
+      : 'https://yt-dlp.org/latest/yt-dlp';
+    
+    // Try primary URL first
+    const url = githubUrl;
+    
     const file = createWriteStream(ytDlpPath);
     
-    https.get(url, (response) => {
-      if (response.statusCode !== 200) {
-        reject(new Error(`Failed to download ${ytDlpFileName}: HTTP ${response.statusCode}`));
-        return;
+    // Function to attempt download from a URL
+    const attemptDownload = (downloadUrl) => {
+      // Close any existing file stream and create a new one
+      if (file) {
+        try {
+          file.close();
+        } catch (err) {
+          // Ignore errors when closing file
+        }
       }
       
-      response.pipe(file);
+      // Create a new write stream
+      const fileStream = createWriteStream(ytDlpPath);
       
-      file.on('finish', () => {
-        file.close();
-        console.log(`✅ Downloaded ${ytDlpFileName} successfully`);
-        resolve();
-      });
-    }).on('error', (err) => {
-      fs.unlink(ytDlpPath, () => {});
-      reject(err);
-    });
+      const handleResponse = (response) => {
+        // Handle redirects (HTTP 302, 301, etc.)
+        if (response.statusCode === 302 || response.statusCode === 301) {
+          const redirectUrl = response.headers.location;
+          console.log(`🔄 Following redirect to: ${redirectUrl}`);
+          https.get(redirectUrl, handleResponse).on('error', handleError);
+          return;
+        }
+        
+        if (response.statusCode !== 200) {
+          console.log(`⚠️ Failed to download from ${downloadUrl}: HTTP ${response.statusCode}`);
+          
+          // If primary URL failed, try fallback URL
+          if (downloadUrl === githubUrl || downloadUrl.startsWith('https://github.com')) {
+            console.log(`🔄 Trying fallback URL: ${fallbackUrl}`);
+            attemptDownload(fallbackUrl);
+            return;
+          }
+          
+          // If we're already using the fallback URL, then fail
+          reject(new Error(`Failed to download ${ytDlpFileName}: HTTP ${response.statusCode}`));
+          return;
+        }
+        
+        response.pipe(fileStream);
+        
+        fileStream.on('finish', () => {
+          fileStream.close();
+          console.log(`✅ Downloaded ${ytDlpFileName} successfully from ${downloadUrl}`);
+          resolve();
+        });
+      };
+      
+      const handleError = (err) => {
+        console.log(`⚠️ Error downloading from ${downloadUrl}:`, err.message);
+        
+        // If primary URL failed, try fallback URL
+        if (downloadUrl === githubUrl || downloadUrl.startsWith('https://github.com')) {
+          console.log(`🔄 Trying fallback URL: ${fallbackUrl}`);
+          attemptDownload(fallbackUrl);
+          return;
+        }
+        
+        // If we're already using the fallback URL, then fail
+        fs.unlink(ytDlpPath, () => {});
+        reject(err);
+      };
+      
+      https.get(downloadUrl, handleResponse).on('error', handleError);
+    };
+    
+    // Start the download process with the primary URL
+    attemptDownload(url);
   });
 }
 

@@ -3,9 +3,9 @@ services:
     name: downloader-backend
     env: node
     buildCommand: |
+      apt-get update && apt-get install -y ffmpeg curl
       chmod +x render-build.sh
-      ./render-build.sh
-      apt-get update && apt-get install -y ffmpeg
+      ./render-build.sh || echo "Warning: render-build.sh failed, but continuing build process"
       npm install
     startCommand: npm start
     envVars:
