@@ -153,46 +153,14 @@ app.post("/api/download/merged", async (req, res) => {
           // FIX: Modified the format string to ensure we get both video and audio
           // The key change is using bestvideo+bestaudio format selector to ensure we get separate streams
           // and then merge them with ffmpeg
-          // Check if cookies file exists and is valid
-          const cookiesPath = path.resolve(process.cwd(), 'youtube-cookies.txt');
+          // Check if cookies file exists
+          const cookiesPath = path.resolve('./youtube-cookies.txt');
+          const cookiesExist = fs.existsSync(cookiesPath);
           
-          // Function to check if cookies file is valid (exists and has content)
-          function isValidCookiesFile(cookiesPath) {
-            try {
-              if (!fs.existsSync(cookiesPath)) {
-                console.log('Cookies file not found at:', cookiesPath);
-                return false;
-              }
-              
-              const stats = fs.statSync(cookiesPath);
-              // Check if file is empty or too small to be valid
-              if (stats.size < 50) { // Minimum size for a valid cookies file
-                console.log(`Cookies file exists but is too small (${stats.size} bytes), might be invalid`);
-                return false;
-              }
-              
-              return true;
-            } catch (err) {
-              console.error(`Error checking cookies file: ${err.message}`);
-              return false;
-            }
-          }
-          
-          const cookiesValid = isValidCookiesFile(cookiesPath);
-          
-          // Note: The cookies file is downloaded during deployment by render-build.sh
-          // It may not exist during local development
-          
-          if (cookiesValid) {
-            console.log(`Found valid cookies file at: ${cookiesPath}`);
-            try {
-              const stats = fs.statSync(cookiesPath);
-              console.log(`Cookies file size: ${stats.size} bytes, permissions: ${stats.mode.toString(8)}`);
-            } catch (err) {
-              console.error(`Error checking cookies file stats: ${err.message}`);
-            }
+          if (cookiesExist) {
+            console.log(`Found cookies file at: ${cookiesPath}`);
           } else {
-            console.log(`Valid cookies file not found at: ${cookiesPath}, will rely on browser cookies`);
+            console.log(`Cookies file not found at: ${cookiesPath}`);
           }
           
           const ytdlpDownloadOptions = {
@@ -205,14 +173,14 @@ app.post("/api/download/merged", async (req, res) => {
             preferFreeFormats: true,
             youtubeSkipDashManifest: false,
             referer: 'https://www.youtube.com/',
-            cookies: cookiesValid ? cookiesPath : null,
-            cookiesFromBrowser: ['chrome', 'edge', 'firefox', 'opera', 'brave', 'vivaldi', 'safari'].join(','), // Try all possible browsers
-            addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0'],
+            cookies: cookiesExist ? cookiesPath : null,
+            cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
+            addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
             // Adding verbose output for debugging
             verbose: true
           };
           
-          console.log(`Using cookies file: ${cookiesValid ? cookiesPath : 'Not found or invalid, using browser cookies instead'}`);
+          console.log(`Using cookies file: ${cookiesExist ? cookiesPath : 'Not found, using browser cookies instead'}`);
           
           // Execute yt-dlp to download and merge the video
           console.log(`Executing yt-dlp with options: ${JSON.stringify(ytdlpDownloadOptions, null, 2)}`);
@@ -242,14 +210,14 @@ app.post("/api/download/merged", async (req, res) => {
               preferFreeFormats: true,
               youtubeSkipDashManifest: false,
               referer: 'https://www.youtube.com/',
-              cookies: cookiesValid ? cookiesPath : null,
-              cookiesFromBrowser: ['chrome', 'edge', 'firefox', 'opera', 'brave', 'vivaldi', 'safari'].join(','), // Try all possible browsers
-              addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0'],
+              cookies: cookiesExist ? cookiesPath : null,
+              cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
+              addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
               // Adding verbose output for debugging
               verbose: true
             };
             
-            console.log(`Using cookies file in fallback: ${cookiesValid ? cookiesPath : 'Not found or invalid, using browser cookies instead'}`);
+            console.log(`Using cookies file in fallback: ${cookiesExist ? cookiesPath : 'Not found, using browser cookies instead'}`);
             
             // Execute yt-dlp to download just the video
             console.log(`Executing fallback yt-dlp with options: ${JSON.stringify(fallbackOptions, null, 2)}`);

@@ -24,30 +24,6 @@ const ytdlp = create(ytdlpBinaryPath);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Function to check if cookies file is valid (exists and has content)
-function isValidCookiesFile(cookiesPath) {
-  try {
-    if (!fs.existsSync(cookiesPath)) {
-      console.log('Cookies file not found at:', cookiesPath);
-      console.log('Note: The cookies file is downloaded during deployment by render-build.sh');
-      console.log('It may not exist during local development');
-      return false;
-    }
-    
-    const stats = fs.statSync(cookiesPath);
-    // Check if file is empty or too small to be valid
-    if (stats.size < 50) { // Minimum size for a valid cookies file
-      console.log(`Cookies file exists but is too small (${stats.size} bytes), might be invalid`);
-      return false;
-    }
-    
-    return true;
-  } catch (err) {
-    console.error(`Error checking cookies file: ${err.message}`);
-    return false;
-  }
-}
-
 function formatDuration(seconds) {
   if (!seconds) return "0:00";
   
@@ -103,12 +79,12 @@ export default async function fetchVideoInfo(url) {
   return await runYtDlpWithErrorHandling(async () => {
 
   try {
-    // Check if cookies file exists and is valid - use absolute path resolution
+    // Check if cookies file exists - use absolute path resolution
     const cookiesPath = path.resolve(process.cwd(), 'youtube-cookies.txt');
-    const cookiesValid = isValidCookiesFile(cookiesPath);
+    const cookiesExist = fs.existsSync(cookiesPath);
     
-    if (cookiesValid) {
-      console.log(`Found valid cookies file at: ${cookiesPath}`);
+    if (cookiesExist) {
+      console.log(`Found cookies file at: ${cookiesPath}`);
       // Log file permissions and size for debugging
       try {
         const stats = fs.statSync(cookiesPath);
@@ -117,7 +93,7 @@ export default async function fetchVideoInfo(url) {
         console.error(`Error checking cookies file stats: ${err.message}`);
       }
     } else {
-      console.log(`Valid cookies file not found at: ${cookiesPath}, will rely on browser cookies`);
+      console.log(`Cookies file not found at: ${cookiesPath}`);
     }
     
     // Get proxy URL from environment variables if available
@@ -141,9 +117,9 @@ export default async function fetchVideoInfo(url) {
       format: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', // Added fallback to any best format
       mergeOutputFormat: 'mp4', // Ensure we merge to MP4 format
       embedThumbnail: true,
-      cookies: cookiesValid ? cookiesPath : null,
-      cookiesFromBrowser: ['chrome', 'edge', 'firefox', 'opera', 'brave', 'vivaldi', 'safari'].join(','), // Try all possible browsers
-      addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0']
+      cookies: cookiesExist ? cookiesPath : null,
+      cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
+      addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
       // Removed proxy setting as it was causing connection timeouts
     };
     
@@ -177,7 +153,7 @@ export default async function fetchVideoInfo(url) {
       }
     
     console.log('Using ytdlpOptions:', JSON.stringify(ytdlpOptions, null, 2));
-    console.log('Using cookies file:', cookiesValid ? cookiesPath : 'No cookies file found');
+    console.log('Using cookies file:', cookiesExist ? cookiesPath : 'No cookies file found');
 
     try {
       console.log('Executing yt-dlp with options:', JSON.stringify(ytdlpOptions, null, 2));
@@ -204,8 +180,8 @@ export default async function fetchVideoInfo(url) {
       const fallbackOptions1 = { 
         ...ytdlpOptions, 
         format: 'best',
-        cookies: cookiesValid ? cookiesPath : null,
-        cookiesFromBrowser: ['chrome', 'edge', 'firefox', 'opera', 'brave', 'vivaldi', 'safari'].join(',') // Try all possible browsers
+        cookies: cookiesExist ? cookiesPath : null,
+        cookiesFromBrowser: cookiesExist ? null : 'chrome' // Try to use browser cookies if cookies file doesn't exist
       };
       try {
         videoInfo = await ytdlp(url, fallbackOptions1);
@@ -221,9 +197,9 @@ export default async function fetchVideoInfo(url) {
           noCheckCertificate: true,
           format: 'best',
           skipDownload: true,
-          cookies: cookiesValid ? cookiesPath : null,
-          cookiesFromBrowser: ['chrome', 'edge', 'firefox', 'opera', 'brave', 'vivaldi', 'safari'].join(','), // Try all possible browsers
-          addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0']
+          cookies: cookiesExist ? cookiesPath : null,
+          cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
+          addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
         };
         
         // Removed proxy setting as it was causing connection timeouts
@@ -573,31 +549,9 @@ export default async function fetchVideoInfo(url) {
       if (innerError.message.includes("sign in") || 
           innerError.message.includes("login") || 
           innerError.message.includes("authentication") || 
-          innerError.message.includes("private") ||
-          innerError.message.includes("bot")) {
-        console.log("Authentication or bot verification error detected, attempting last resort authentication");
-        
-        // Try one more time with explicit Firefox browser cookies and a different user agent
-        try {
-          console.log('Attempting last resort authentication with Firefox browser cookies...');
-          const lastResortOptions = {
-            dumpSingleJson: true,
-            noWarnings: true,
-            noCheckCertificate: true,
-            format: 'best',
-            skipDownload: true,
-            cookiesFromBrowser: ['firefox', 'chrome', 'edge', 'opera', 'brave', 'vivaldi', 'safari'].join(','), // Try all possible browsers
-            addHeader: ['User-Agent:Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/115.0']
-          };
-          
-          console.log('Using last resort options:', JSON.stringify(lastResortOptions, null, 2));
-          const lastResortInfo = await ytdlp(url, lastResortOptions);
-          console.log('Last resort authentication succeeded!');
-          return lastResortInfo;
-        } catch (lastResortError) {
-          console.error('Last resort authentication also failed:', lastResortError);
-          throw new Error("This video requires authentication. Please try a different URL or video.");
-        }
+          innerError.message.includes("private")) {
+        console.log("Authentication or private video error detected, retrying with cookies");
+        throw new Error("This video requires authentication. Please try a different URL or video.");
       }
       
       throw new Error("Failed to process video information. Please try a different URL or video.");
@@ -664,15 +618,14 @@ export default async function fetchVideoInfo(url) {
       
       try {
         // Try with a completely different set of options as a last resort
-        // Check if cookies file exists and is valid
+        // Check if cookies file exists again to be sure
         const cookiesPath = path.resolve('./youtube-cookies.txt');
-        const cookiesValid = isValidCookiesFile(cookiesPath);
+        const cookiesExist = fs.existsSync(cookiesPath);
         
-        if (cookiesValid) {
-          console.log(`Found valid cookies file at: ${cookiesPath} for last resort attempt`);
+        if (cookiesExist) {
+          console.log(`Found cookies file at: ${cookiesPath} for last resort attempt`);
         } else {
-          console.log(`Valid cookies file not found at: ${cookiesPath} for last resort attempt, will rely on browser cookies`);
-          console.log('Note: The cookies file is downloaded during deployment by render-build.sh');
+          console.log(`Cookies file not found at: ${cookiesPath} for last resort attempt`);
         }
         
         const lastResortOptions = {
@@ -682,9 +635,9 @@ export default async function fetchVideoInfo(url) {
           noCheckCertificate: true,
           format: 'best',
           skipDownload: true,
-          cookies: cookiesValid ? cookiesPath : null,
-          cookiesFromBrowser: ['chrome', 'edge', 'firefox', 'opera', 'brave', 'vivaldi', 'safari'].join(','), // Try all possible browsers
-          addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0']
+          cookies: cookiesExist ? cookiesPath : null,
+          cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
+          addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
         };
         
         // Removed proxy setting as it was causing connection timeouts
