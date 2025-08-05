@@ -2,47 +2,11 @@
 import ytdlp from "yt-dlp-exec";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
-// Check if we're running in production (Render.com)
-const isProduction = process.env.NODE_ENV === 'production';
-
-// Define fallback binary directory
-const binDir = '/tmp/bin';
-
-// Define paths for yt-dlp and FFmpeg in production
-let ytDlpPath, ffmpegPath, ffprobePath;
-
-if (isProduction) {
-  // Check if binaries exist
-  if (fs.existsSync(`${binDir}/yt-dlp`)) {
-    ytDlpPath = `${binDir}/yt-dlp`;
-  } else {
-    ytDlpPath = undefined;
-  }
-  
-  if (fs.existsSync(`${binDir}/ffmpeg`)) {
-    ffmpegPath = `${binDir}/ffmpeg`;
-  } else {
-    ffmpegPath = undefined;
-  }
-  
-  if (fs.existsSync(`${binDir}/ffprobe`)) {
-    ffprobePath = `${binDir}/ffprobe`;
-  } else {
-    ffprobePath = undefined;
-  }
-} else {
-  ytDlpPath = undefined;
-  ffmpegPath = undefined;
-  ffprobePath = undefined;
-}
-
-// Log paths for debugging
-if (isProduction) {
-  console.log('Using yt-dlp path:', ytDlpPath);
-  console.log('Using FFmpeg path:', ffmpegPath);
-  console.log('Using FFprobe path:', ffprobePath);
-}
+// Create __dirname equivalent for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function formatDuration(seconds) {
   if (!seconds) return "0:00";
@@ -77,6 +41,9 @@ export default async function fetchVideoInfo(url) {
     const cookiesPath = './youtube-cookies.txt';
     const cookiesExist = fs.existsSync(cookiesPath);
     
+    // Get proxy URL from environment variables if available
+    const proxyUrl = process.env.PROXY_URL || null;
+    
     // Use a configuration focused on getting all formats including audio and video with audio
     // Prioritize MP4 formats and avoid m3u8 formats
     const ytdlpOptions = {
@@ -88,49 +55,99 @@ export default async function fetchVideoInfo(url) {
       referer: 'https://www.youtube.com/',
       skipDownload: true,
       forceIpv4: true,
-      socketTimeout: 60,
+      socketTimeout: 120, // Increased timeout for better reliability
       extractAudio: true,
       audioFormat: 'mp3',
       audioQuality: 0, // best quality
-      format: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]', // Prioritize MP4 formats
+      format: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', // Added fallback to any best format
       mergeOutputFormat: 'mp4', // Ensure we merge to MP4 format
       embedThumbnail: true,
       cookies: cookiesExist ? cookiesPath : null,
-      addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36']
+      addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
+      // Removed proxy setting as it was causing connection timeouts
     };
     
-    // If in production, specify FFmpeg path and yt-dlp path
-    if (isProduction) {
-      if (ffmpegPath) {
-        ytdlpOptions.ffmpegLocation = ffmpegPath;
+    // Note: yt-dlp-exec doesn't support the binPath option directly
+      // It uses the yt-dlp binary from node_modules by default
+      // We'll log this information for debugging purposes
+      if (process.platform === 'win32') {
+        console.log("Running on Windows platform");
+        
+        // Check if yt-dlp exists in various locations for debugging
+        const possiblePaths = [
+          './yt-dlp.exe',
+          './bin/yt-dlp.exe',
+          './yt-dlp_new.exe',
+          '../yt-dlp.exe',
+          '../bin/yt-dlp.exe',
+          path.join(__dirname, 'node_modules', 'yt-dlp-exec', 'bin', 'yt-dlp.exe')
+        ];
+        
+        for (const testPath of possiblePaths) {
+          try {
+            if (fs.existsSync(testPath)) {
+              console.log(`Found yt-dlp binary at: ${testPath}`);
+            }
+          } catch (err) {
+            console.error(`Error checking path ${testPath}:`, err);
+          }
+        }
+        
+        console.log("Using default yt-dlp binary from node_modules");
       }
-      if (ytDlpPath) {
-        ytdlpOptions.binPath = ytDlpPath;
-      }
-    }
     
     console.log('Using ytdlpOptions:', JSON.stringify(ytdlpOptions, null, 2));
     console.log('Using cookies file:', cookiesExist ? cookiesPath : 'No cookies file found');
 
     try {
-      // In production, specify the binary path
-      if (isProduction) {
-        console.log('Using yt-dlp binary path:', ytDlpPath);
-        if (ytDlpPath) {
-          ytdlpOptions.binaryPath = ytDlpPath;
-        }
-        if (ffmpegPath) {
-          ytdlpOptions.ffmpegLocation = ffmpegPath;
-        }
-      }
+      console.log('Executing yt-dlp with options:', JSON.stringify(ytdlpOptions, null, 2));
+      console.log('Using yt-dlp executable path:', process.platform === 'win32' ? './yt-dlp.exe' : 'yt-dlp');
       
-      let videoInfo = await ytdlp(url, ytdlpOptions);
+      // Add a timeout promise to handle potential hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('yt-dlp operation timed out after 30 seconds')), 30000);
+      });
+      
+      // Race the ytdlp operation against the timeout
+      let videoInfo;
+      try {
+        videoInfo = await Promise.race([
+          ytdlp(url, ytdlpOptions),
+          timeoutPromise
+        ]);
+      } catch (execError) {
+        console.error('Error executing yt-dlp:', execError);
+        
+        // Try with a simpler format string as fallback
+      console.log('Trying fallback with simpler format string...');
+      const fallbackOptions1 = { ...ytdlpOptions, format: 'best' };
+      try {
+        videoInfo = await ytdlp(url, fallbackOptions1);
+        console.log('Fallback with simpler format string succeeded');
+      } catch (fallback1Error) {
+        console.error('Error with first fallback:', fallback1Error);
+        
+        // Try with minimal options as a last resort
+        console.log('Trying with minimal options as last resort...');
+        const fallbackOptions2 = {
+          dumpSingleJson: true,
+          noWarnings: true,
+          noCheckCertificate: true,
+          format: 'best',
+          skipDownload: true,
+          addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
+        };
+        
+        // Removed proxy setting as it was causing connection timeouts
+        
+        videoInfo = await ytdlp(url, fallbackOptions2);
+        console.log('Last resort fallback succeeded');
+      }
+      }
       
       // Log the entire videoInfo object for debugging
       console.log('Video info extracted successfully');
       console.log('Video info type:', typeof videoInfo);
-      console.log('Raw videoInfo:', videoInfo);
-
       
       // If videoInfo is a string, try to parse it as JSON
       if (typeof videoInfo === 'string') {
@@ -478,22 +495,116 @@ export default async function fetchVideoInfo(url) {
   } catch (err) {
     console.error("Error fetching video info:", err);
     
+    // Log detailed error information for debugging
+    if (err.stderr) {
+      console.error("yt-dlp stderr output:", err.stderr);
+    }
+    if (err.stdout) {
+      console.error("yt-dlp stdout output:", err.stdout);
+    }
+    if (err.code) {
+      console.error("yt-dlp exit code:", err.code);
+    }
+    
+    // Try to extract the most specific error message from stderr if available
+    let errorMessage = "Failed to extract video information. Please check the URL and try again.";
+    
     // Handle specific error cases
-    if (err.message.includes("Video unavailable")) {
-      throw new Error("This video is unavailable or private.");
-    } else if (err.message.includes("Could not extract video title")) {
-      throw new Error("Could not extract video information. Please check if the URL is correct and the video exists.");
+    if (err.message.includes("Video unavailable") || (err.stderr && err.stderr.includes("Video unavailable"))) {
+      errorMessage = "This video is unavailable or private.";
+    } else if (err.message.includes("Could not extract video title") || (err.stderr && err.stderr.includes("Could not extract"))) {
+      errorMessage = "Could not extract video information. Please check if the URL is correct and the video exists.";
     } else if (err.message.includes("Invalid YouTube URL") || err.message.includes("Invalid URL provided")) {
-      throw new Error(err.message);
-    } else if (err.stderr && err.stderr.includes("ERROR:")) {
-      // Extract the specific error message from yt-dlp stderr if available
-      const match = err.stderr.match(/ERROR:\s*(.+?)(?:\n|$)/);
-      if (match && match[1]) {
-        throw new Error(`YouTube error: ${match[1]}`);
+      errorMessage = err.message;
+    } else if (err.message.includes("This video is not available") || 
+               err.message.includes("not available in your country") ||
+               (err.stderr && err.stderr.includes("not available in your country"))) {
+      errorMessage = "This video is not available in your region or has been restricted by YouTube.";
+    } else if (err.message.includes("Sign in") || 
+               err.message.includes("sign in") || 
+               err.message.includes("login") ||
+               (err.stderr && (err.stderr.includes("Sign in") || err.stderr.includes("login required")))) {
+      errorMessage = "This video requires authentication. Please try a different URL or video.";
+    } else if (err.message.includes("timed out") || (err.stderr && err.stderr.includes("timed out"))) {
+      errorMessage = "The request timed out. YouTube might be blocking our requests or the server is overloaded.";
+    } else if (err.stderr) {
+      // Try to extract the most specific error message from stderr
+      const errorPatterns = [
+        /ERROR:\s*(.+?)(?:\n|$)/,
+        /Unable to extract\s*(.+?)(?:\n|$)/,
+        /\[youtube\]\s*(.+?)(?:\n|$)/,
+        /\[error\]\s*(.+?)(?:\n|$)/
+      ];
+      
+      for (const pattern of errorPatterns) {
+        const match = err.stderr.match(pattern);
+        if (match && match[1]) {
+          errorMessage = `YouTube error: ${match[1]}`;
+          break;
+        }
       }
     }
     
-    // Generic fallback error
-    throw new Error("Failed to extract video information. Please check the URL and try again.");
+    // Try with a different approach if it seems to be an extraction issue
+    if ((err.stderr && err.stderr.includes("Unable to extract")) || 
+        err.message.includes("Unable to extract") ||
+        err.message.includes("Unsupported URL")) {
+      
+      console.log("Extraction failure detected, trying alternative approach...");
+      
+      try {
+        // Try with a completely different set of options as a last resort
+        const lastResortOptions = {
+          dumpSingleJson: true,
+          noWarnings: true,
+          noCallHome: true,
+          noCheckCertificate: true,
+          format: 'best',
+          skipDownload: true,
+          addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
+        };
+        
+        // Removed proxy setting as it was causing connection timeouts
+        
+        console.log("Trying last resort options:", JSON.stringify(lastResortOptions, null, 2));
+        const lastResortInfo = await ytdlp(url, lastResortOptions);
+        
+        // If we get here, it worked! Process the result
+        let videoInfo = lastResortInfo;
+        if (typeof videoInfo === 'string') {
+          videoInfo = JSON.parse(videoInfo);
+        }
+        
+        if (videoInfo && videoInfo.title) {
+          console.log("Last resort approach succeeded!");
+          return {
+            title: videoInfo.title,
+            thumbnail: videoInfo.thumbnail,
+            duration: formatDuration(videoInfo.duration || 0),
+            qualityOptions: [{
+              formatId: 'best',
+              formatType: 'Video',
+              quality: 'Best Quality',
+              ext: videoInfo.ext || 'mp4',
+              hasVideo: true,
+              hasAudio: true,
+              height: videoInfo.height || 720,
+              width: videoInfo.width || 1280,
+              fps: videoInfo.fps || 30,
+              filesize: videoInfo.filesize || 0,
+              readableFilesize: '10-50 MB',
+              url: videoInfo.url
+            }],
+            subtitleOptions: []
+          };
+        }
+      } catch (lastResortError) {
+        console.error("Last resort approach also failed:", lastResortError);
+      }
+    }
+    
+    // If we got here, all approaches failed
+    console.error("All extraction approaches failed");
+    throw new Error(errorMessage);
   }
 }
