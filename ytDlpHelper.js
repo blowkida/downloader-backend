@@ -117,7 +117,7 @@ export default async function fetchVideoInfo(url) {
       format: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', // Added fallback to any best format
       mergeOutputFormat: 'mp4', // Ensure we merge to MP4 format
       embedThumbnail: true,
-      cookies: cookiesExist ? cookiesPath : null,
+      cookies: cookiesPath, // Always specify the cookies path even if file doesn't exist
       addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
       // Removed proxy setting as it was causing connection timeouts
     };
@@ -179,7 +179,7 @@ export default async function fetchVideoInfo(url) {
       const fallbackOptions1 = { 
         ...ytdlpOptions, 
         format: 'best',
-        cookies: cookiesExist ? cookiesPath : null
+        cookies: cookiesPath // Always specify the cookies path even if file doesn't exist
       };
       try {
         videoInfo = await ytdlp(url, fallbackOptions1);
@@ -195,7 +195,7 @@ export default async function fetchVideoInfo(url) {
           noCheckCertificate: true,
           format: 'best',
           skipDownload: true,
-          cookies: cookiesExist ? cookiesPath : null,
+          cookies: cookiesPath, // Always specify the cookies path even if file doesn't exist
           addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
         };
         
@@ -632,7 +632,7 @@ export default async function fetchVideoInfo(url) {
           noCheckCertificate: true,
           format: 'best',
           skipDownload: true,
-          cookies: cookiesExist ? cookiesPath : null,
+          cookies: cookiesPath, // Always specify the cookies path even if file doesn't exist
           addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
         };
         

@@ -173,13 +173,13 @@ app.post("/api/download/merged", async (req, res) => {
             preferFreeFormats: true,
             youtubeSkipDashManifest: false,
             referer: 'https://www.youtube.com/',
-            cookies: cookiesExist ? cookiesPath : null,
+            cookies: cookiesPath, // Always specify the cookies path even if file doesn't exist
             addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
             // Adding verbose output for debugging
             verbose: true
           };
           
-          console.log(`Using cookies file: ${cookiesExist ? cookiesPath : 'Not found'}`);
+          console.log(`Using cookies file path: ${cookiesPath} (File exists: ${cookiesExist})`);
           
           // Execute yt-dlp to download and merge the video
           console.log(`Executing yt-dlp with options: ${JSON.stringify(ytdlpDownloadOptions, null, 2)}`);
@@ -209,13 +209,13 @@ app.post("/api/download/merged", async (req, res) => {
               preferFreeFormats: true,
               youtubeSkipDashManifest: false,
               referer: 'https://www.youtube.com/',
-              cookies: cookiesExist ? cookiesPath : null,
+              cookies: cookiesPath, // Always specify the cookies path even if file doesn't exist
               addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
               // Adding verbose output for debugging
               verbose: true
             };
             
-            console.log(`Using cookies file in fallback: ${cookiesExist ? cookiesPath : 'Not found'}`);
+            console.log(`Using cookies file path in fallback: ${cookiesPath} (File exists: ${cookiesExist})`);
             
             // Execute yt-dlp to download just the video
             console.log(`Executing fallback yt-dlp with options: ${JSON.stringify(fallbackOptions, null, 2)}`);
