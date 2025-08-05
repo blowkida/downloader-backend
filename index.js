@@ -153,6 +153,16 @@ app.post("/api/download/merged", async (req, res) => {
           // FIX: Modified the format string to ensure we get both video and audio
           // The key change is using bestvideo+bestaudio format selector to ensure we get separate streams
           // and then merge them with ffmpeg
+          // Check if cookies file exists
+          const cookiesPath = path.resolve('./youtube-cookies.txt');
+          const cookiesExist = fs.existsSync(cookiesPath);
+          
+          if (cookiesExist) {
+            console.log(`Found cookies file at: ${cookiesPath}`);
+          } else {
+            console.log(`Cookies file not found at: ${cookiesPath}`);
+          }
+          
           const ytdlpDownloadOptions = {
             format: `${videoFormatId}+bestaudio[ext=m4a]/best`, // Use specified videoFormatId + best audio
             mergeOutputFormat: 'mp4',
@@ -163,6 +173,8 @@ app.post("/api/download/merged", async (req, res) => {
             preferFreeFormats: true,
             youtubeSkipDashManifest: false,
             referer: 'https://www.youtube.com/',
+            cookies: cookiesExist ? cookiesPath : null,
+            cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
             addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
             // Adding verbose output for debugging
             verbose: true
@@ -196,6 +208,8 @@ app.post("/api/download/merged", async (req, res) => {
               preferFreeFormats: true,
               youtubeSkipDashManifest: false,
               referer: 'https://www.youtube.com/',
+              cookies: cookiesExist ? cookiesPath : null,
+              cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
               addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
               // Adding verbose output for debugging
               verbose: true

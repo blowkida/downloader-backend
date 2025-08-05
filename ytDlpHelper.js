@@ -80,8 +80,14 @@ export default async function fetchVideoInfo(url) {
 
   try {
     // Check if cookies file exists
-    const cookiesPath = './youtube-cookies.txt';
+    const cookiesPath = path.resolve('./youtube-cookies.txt');
     const cookiesExist = fs.existsSync(cookiesPath);
+    
+    if (cookiesExist) {
+      console.log(`Found cookies file at: ${cookiesPath}`);
+    } else {
+      console.log(`Cookies file not found at: ${cookiesPath}`);
+    }
     
     // Get proxy URL from environment variables if available
     const proxyUrl = process.env.PROXY_URL || null;
@@ -105,6 +111,7 @@ export default async function fetchVideoInfo(url) {
       mergeOutputFormat: 'mp4', // Ensure we merge to MP4 format
       embedThumbnail: true,
       cookies: cookiesExist ? cookiesPath : null,
+      cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
       addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
       // Removed proxy setting as it was causing connection timeouts
     };
@@ -162,7 +169,13 @@ export default async function fetchVideoInfo(url) {
         
         // Try with a simpler format string as fallback
       console.log('Trying fallback with simpler format string...');
-      const fallbackOptions1 = { ...ytdlpOptions, format: 'best' };
+      // Ensure cookies are properly set in the fallback options
+      const fallbackOptions1 = { 
+        ...ytdlpOptions, 
+        format: 'best',
+        cookies: cookiesExist ? cookiesPath : null,
+        cookiesFromBrowser: cookiesExist ? null : 'chrome' // Try to use browser cookies if cookies file doesn't exist
+      };
       try {
         videoInfo = await ytdlp(url, fallbackOptions1);
         console.log('Fallback with simpler format string succeeded');
@@ -596,6 +609,16 @@ export default async function fetchVideoInfo(url) {
       
       try {
         // Try with a completely different set of options as a last resort
+        // Check if cookies file exists again to be sure
+        const cookiesPath = path.resolve('./youtube-cookies.txt');
+        const cookiesExist = fs.existsSync(cookiesPath);
+        
+        if (cookiesExist) {
+          console.log(`Found cookies file at: ${cookiesPath} for last resort attempt`);
+        } else {
+          console.log(`Cookies file not found at: ${cookiesPath} for last resort attempt`);
+        }
+        
         const lastResortOptions = {
           dumpSingleJson: true,
           noWarnings: true,
@@ -603,6 +626,8 @@ export default async function fetchVideoInfo(url) {
           noCheckCertificate: true,
           format: 'best',
           skipDownload: true,
+          cookies: cookiesExist ? cookiesPath : null,
+          cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
           addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
         };
         
