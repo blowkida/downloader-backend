@@ -4,9 +4,21 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// Create ytdlp instance with system binary path instead of node_modules path
-// This ensures we use the system-installed binary rather than expecting it in node_modules
-const ytdlp = create(process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+// Determine the best path for yt-dlp binary
+let ytdlpBinaryPath = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
+
+// Check if yt-dlp exists in the current directory (for local development)
+const localBinaryPath = path.join(process.cwd(), ytdlpBinaryPath);
+if (fs.existsSync(localBinaryPath)) {
+  console.log(`Using local yt-dlp binary at: ${localBinaryPath}`);
+  ytdlpBinaryPath = localBinaryPath;
+} else {
+  console.log(`Local yt-dlp binary not found at ${localBinaryPath}, using system path`);
+}
+
+// Create ytdlp instance with the determined binary path
+// This ensures we use the best available binary rather than expecting it in node_modules
+const ytdlp = create(ytdlpBinaryPath);
 
 // Create __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -25,6 +37,29 @@ function formatDuration(seconds) {
   return `${minutes}:${secs.toString().padStart(2, "0")}`;
 }
 
+// Helper function to handle yt-dlp errors with better messages
+async function runYtDlpWithErrorHandling(fn) {
+  try {
+    return await fn();
+  } catch (error) {
+    // Handle ENOENT error (binary not found)
+    if (error.code === 'ENOENT') {
+      console.error('ERROR: yt-dlp binary not found!');
+      console.error(`Attempted to use binary at: ${ytdlpBinaryPath}`);
+      console.error('Please install yt-dlp using one of the following methods:');
+      console.error('1. Run "npm run install-yt-dlp" to automatically install yt-dlp');
+      console.error('2. Run the install-yt-dlp.bat (Windows) or install-yt-dlp.sh (macOS/Linux) script');
+      console.error('3. Follow the manual installation instructions in the README.md file');
+      
+      // Throw a more user-friendly error
+      throw new Error('yt-dlp binary not found. Please install yt-dlp first.');
+    }
+    
+    // Re-throw other errors
+    throw error;
+  }
+}
+
 export default async function fetchVideoInfo(url) {
   console.log('Fetching video info for URL:', url);
   
@@ -39,6 +74,9 @@ export default async function fetchVideoInfo(url) {
     console.error('Invalid YouTube URL format:', url);
     throw new Error("Invalid YouTube URL. Please enter a valid YouTube video URL.");
   }
+  
+  // Use the error handling wrapper for all yt-dlp operations
+  return await runYtDlpWithErrorHandling(async () => {
 
   try {
     // Check if cookies file exists
@@ -611,4 +649,5 @@ export default async function fetchVideoInfo(url) {
     console.error("All extraction approaches failed");
     throw new Error(errorMessage);
   }
+  });
 }

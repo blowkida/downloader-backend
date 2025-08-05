@@ -16,22 +16,59 @@ This is the backend server for the YouTube Downloader application. It provides A
 
 2. For local development, you need to install yt-dlp manually:
    - **Windows**: 
-     - Download yt-dlp from https://github.com/yt-dlp/yt-dlp/releases and place it in the server directory
-   - **macOS**: 
-     ```
-     brew install yt-dlp
-     ```
-   - **Linux**: 
-     ```
-     sudo apt update
-     sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
-     sudo chmod a+rx /usr/local/bin/yt-dlp
-     ```
+     - **Option 1**: Run the included batch file for automatic installation:
+       ```
+       install-yt-dlp.bat
+       ```
+     - **Option 2**: Manual installation:
+       - Download yt-dlp from https://github.com/yt-dlp/yt-dlp/releases and place it in the server directory
+       - Rename it to `yt-dlp.exe` if it's not already named that
+       - Make sure it's in the same directory as your server files
+   - **macOS/Linux**: 
+     - **Option 1**: Run the included shell script for automatic installation:
+       ```
+       chmod +x install-yt-dlp.sh
+       ./install-yt-dlp.sh
+       ```
+     - **Option 2**: Manual installation:
+       - **macOS**: 
+         ```
+         brew install yt-dlp
+         ```
+       - **Linux**: 
+         ```
+         sudo apt update
+         sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
+         sudo chmod a+rx /usr/local/bin/yt-dlp
+         ```
 
-3. Start the development server:
+   **Important**: After installing yt-dlp, verify it's working by running:
+    ```
+    npm run test-yt-dlp
+    ```
+    This will test if yt-dlp is installed correctly and can fetch video information.
+    
+    Alternatively, you can check the version directly:
+    - Windows: `yt-dlp.exe --version` in the server directory
+    - macOS/Linux: `yt-dlp --version` in terminal
+
+3. **Automatic yt-dlp Installation**:
+   The project now includes an automatic installer script that will download and verify yt-dlp for you:
+   ```
+   npm run install-yt-dlp
+   ```
+   This script will:
+   - Check if yt-dlp is already installed in the server directory
+   - Download the latest version if needed
+   - Make it executable (on macOS/Linux)
+   - Verify it's working correctly
+
+4. Start the development server:
    ```
    npm start
    ```
+   
+   Note: The installer script will also run automatically during `npm install` via the postinstall hook.
 
 ## Production Deployment (Render.com)
 
@@ -74,10 +111,63 @@ The `render-build.sh` script installs yt-dlp in the user's home directory (`$HOM
 
 ## Troubleshooting
 
+### Resolving "spawn yt-dlp ENOENT" Error
+
+If you encounter the error `spawn yt-dlp ENOENT`, it means the application cannot find the yt-dlp binary. Here's how to fix it:
+
+#### Quick Fix:
+
+Run the automatic installer script:
+```
+npm run install-yt-dlp
+```
+
+Then test if it's working:
+```
+npm run test-yt-dlp
+```
+
+#### For Windows Users:
+
+1. Run the batch file:
+   ```
+   install-yt-dlp.bat
+   ```
+
+2. Verify the binary is in the server directory and named exactly `yt-dlp.exe`
+
+3. Make sure the file is not blocked by Windows security - right-click the file, select Properties, and check if there's an "Unblock" option at the bottom of the General tab
+
+#### For macOS/Linux Users:
+
+1. Run the shell script:
+   ```
+   chmod +x install-yt-dlp.sh
+   ./install-yt-dlp.sh
+   ```
+
+2. Verify the binary is executable:
+   ```
+   chmod +x yt-dlp
+   ./yt-dlp --version
+   ```
+
+#### How the Application Finds yt-dlp:
+
+The application now uses an improved binary detection system:
+
+1. It first checks if `yt-dlp` (or `yt-dlp.exe` on Windows) exists in the current directory
+2. If found, it uses the local binary with absolute path
+3. If not found, it falls back to the system path
+
+This logic is implemented in both `index.js` and `ytDlpHelper.js` to ensure consistent behavior.
+
+### For Production (Render.com):
+
 If you encounter issues with yt-dlp in production:
 
 1. Check the logs to see if yt-dlp was downloaded and installed correctly
-2. Verify that the PATH environment variable includes all necessary directories: `./node_modules/.bin:$HOME/bin:.:/usr/local/bin:/usr/bin`
+2. Verify that the PATH environment variable includes all necessary directories: `$HOME/bin:/usr/local/bin:/usr/bin:$PATH`
 3. Make sure the `render-build.sh` script executed successfully during the build process
 4. Check if yt-dlp is accessible at one of these locations:
    - `$HOME/bin/yt-dlp` (primary installation)

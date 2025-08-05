@@ -3,9 +3,12 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-  "start": "node index.js",
-  "build": "apt-get update && apt-get install -y ffmpeg python3 python3-pip && pip3 install yt-dlp && npm install"
-},
+    "start": "node index.js",
+    "build": "apt-get update && apt-get install -y ffmpeg python3 python3-pip && pip3 install yt-dlp && npm install",
+    "install-yt-dlp": "node install-yt-dlp.js",
+    "test-yt-dlp": "node test-yt-dlp.js",
+    "postinstall": "npm run install-yt-dlp"
+  },
 
   "dependencies": {
   "cors": "^2.8.5",

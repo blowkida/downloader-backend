@@ -1,10 +1,25 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import ytdlp from "yt-dlp-exec";
+import { create } from "yt-dlp-exec";
 import path from "path";
 import fs from "fs";
 import fetchVideoInfo from "./ytDlpHelper.js";
+
+// Determine the best path for yt-dlp binary
+let ytdlpBinaryPath = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
+
+// Check if yt-dlp exists in the current directory (for local development)
+const localBinaryPath = path.join(process.cwd(), ytdlpBinaryPath);
+if (fs.existsSync(localBinaryPath)) {
+  console.log(`Using local yt-dlp binary at: ${localBinaryPath}`);
+  ytdlpBinaryPath = localBinaryPath;
+} else {
+  console.log(`Local yt-dlp binary not found at ${localBinaryPath}, using system path`);
+}
+
+// Create ytdlp instance with the determined binary path
+const ytdlp = create(ytdlpBinaryPath);
 
 // Load environment variables
 dotenv.config();
@@ -42,6 +57,21 @@ if (!fs.existsSync(tempDir)) {
 
 // Serve static files from the temp directory
 app.use('/temp', express.static(tempDir));
+
+// Helper function to handle errors
+function handleError(res, error) {
+  console.error('Error:', error.message);
+  
+  // Provide a more user-friendly message for ENOENT errors
+  if (error.code === 'ENOENT') {
+    return res.status(500).json({
+      error: 'yt-dlp binary not found. Please make sure yt-dlp is installed correctly.',
+      details: 'Run "npm run install-yt-dlp" to automatically install yt-dlp.'
+    });
+  }
+  
+  res.status(500).json({ error: error.message });
+}
 
 app.post("/api/download", async (req, res) => {
   const { url } = req.body;
@@ -86,11 +116,7 @@ app.post("/api/download", async (req, res) => {
     }
   } catch (error) {
     console.error(`[${new Date().toISOString()}] Unexpected error in /api/download:`, error);
-    res.status(500).json({
-      error: 'An unexpected error occurred while processing your request',
-      errorCode: 'SERVER_ERROR',
-      timestamp: new Date().toISOString()
-    });
+    handleError(res, error);
   }
 });
 
