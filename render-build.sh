@@ -71,9 +71,18 @@ if [ ! -f "./youtube-cookies.txt" ]; then
 # Format: domain_name TRUE|FALSE path secure expiry name value
 .youtube.com	TRUE	/	FALSE	0	YSC	placeholder
 .youtube.com	TRUE	/	TRUE	0	CONSENT	placeholder
+.youtube.com	TRUE	/	FALSE	0	LOGIN_INFO	placeholder
+.youtube.com	TRUE	/	FALSE	0	SID	placeholder
+.youtube.com	TRUE	/	FALSE	0	__Secure-1PSID	placeholder
+.youtube.com	TRUE	/	FALSE	0	__Secure-3PSID	placeholder
+.youtube.com	TRUE	/	FALSE	0	SSID	placeholder
+.youtube.com	TRUE	/	FALSE	0	AECHID	placeholder
+.youtube.com	TRUE	/	FALSE	0	SAPISID	placeholder
+.youtube.com	TRUE	/	FALSE	0	__Secure-1PSIDTS	placeholder
+.youtube.com	TRUE	/	FALSE	0	__Secure-3PSIDTS	placeholder
 EOL
   chmod 644 ./youtube-cookies.txt
-  echo "✅ Created placeholder youtube-cookies.txt with basic structure"
+  echo "✅ Created comprehensive placeholder youtube-cookies.txt with authentication cookies"
 else
   echo "✅ youtube-cookies.txt already exists"
 fi
