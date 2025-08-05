@@ -5,6 +5,7 @@ import ytdlp from "yt-dlp-exec";
 import path from "path";
 import fs from "fs";
 import fetchVideoInfo from "./ytDlpHelper.js";
+import { cleanupTempFiles } from "./cleanup.js";
 
 // Load environment variables
 dotenv.config();
@@ -261,4 +262,16 @@ app.post("/api/download/merged", async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  
+  // Run initial cleanup
+  cleanupTempFiles();
+  
+  // Schedule cleanup to run every 15 minutes
+  const CLEANUP_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+  setInterval(() => {
+    console.log('Running scheduled temp file cleanup...');
+    cleanupTempFiles();
+  }, CLEANUP_INTERVAL_MS);
+  
+  console.log(`Temp file cleanup scheduled to run every 15 minutes`);
 });

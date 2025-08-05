@@ -28,8 +28,24 @@ echo "📁 Creating temp directory..."
 mkdir -p "./temp"
 chmod 755 "./temp"
 
+# Create node_modules/.bin directory if it doesn't exist
+echo "📁 Creating node_modules/.bin directory..."
+mkdir -p "./node_modules/.bin"
+
+# Create node_modules/yt-dlp-exec/bin directory if it doesn't exist
+echo "📁 Creating node_modules/yt-dlp-exec/bin directory..."
+mkdir -p "./node_modules/yt-dlp-exec/bin"
+
+# Create symlinks to yt-dlp in various locations
+echo "🔗 Creating symlinks to yt-dlp..."
+ln -sf "$BIN_DIR/yt-dlp" "./node_modules/.bin/yt-dlp"
+ln -sf "$BIN_DIR/yt-dlp" "./node_modules/yt-dlp-exec/bin/yt-dlp"
+ln -sf "$BIN_DIR/yt-dlp" "./yt-dlp"
+
 # Verify installations
 echo "🔍 Verifying installations..."
 which yt-dlp || echo "⚠️ yt-dlp not found in PATH"
+ls -la "./node_modules/.bin/yt-dlp" || echo "⚠️ Symlink in node_modules/.bin not created"
+ls -la "./node_modules/yt-dlp-exec/bin/yt-dlp" || echo "⚠️ Symlink in node_modules/yt-dlp-exec/bin not created"
 
 echo "✅ Build script completed successfully."
