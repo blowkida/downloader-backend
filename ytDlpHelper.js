@@ -28,6 +28,9 @@ const __dirname = path.dirname(__filename);
 function isValidCookiesFile(cookiesPath) {
   try {
     if (!fs.existsSync(cookiesPath)) {
+      console.log('Cookies file not found at:', cookiesPath);
+      console.log('Note: The cookies file is downloaded during deployment by render-build.sh');
+      console.log('It may not exist during local development');
       return false;
     }
     
@@ -669,6 +672,7 @@ export default async function fetchVideoInfo(url) {
           console.log(`Found valid cookies file at: ${cookiesPath} for last resort attempt`);
         } else {
           console.log(`Valid cookies file not found at: ${cookiesPath} for last resort attempt, will rely on browser cookies`);
+          console.log('Note: The cookies file is downloaded during deployment by render-build.sh');
         }
         
         const lastResortOptions = {

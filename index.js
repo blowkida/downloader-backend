@@ -160,6 +160,7 @@ app.post("/api/download/merged", async (req, res) => {
           function isValidCookiesFile(cookiesPath) {
             try {
               if (!fs.existsSync(cookiesPath)) {
+                console.log('Cookies file not found at:', cookiesPath);
                 return false;
               }
               
@@ -178,6 +179,9 @@ app.post("/api/download/merged", async (req, res) => {
           }
           
           const cookiesValid = isValidCookiesFile(cookiesPath);
+          
+          // Note: The cookies file is downloaded during deployment by render-build.sh
+          // It may not exist during local development
           
           if (cookiesValid) {
             console.log(`Found valid cookies file at: ${cookiesPath}`);
