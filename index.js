@@ -174,14 +174,12 @@ app.post("/api/download/merged", async (req, res) => {
             youtubeSkipDashManifest: false,
             referer: 'https://www.youtube.com/',
             cookies: cookiesExist ? cookiesPath : null,
-            cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
-            cookiesFromBrowserPath: cookiesExist ? null : '/opt/render/.config/google-chrome', // Specify the exact path for Chrome cookies
             addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
             // Adding verbose output for debugging
             verbose: true
           };
           
-          console.log(`Using cookies file: ${cookiesExist ? cookiesPath : 'Not found, using browser cookies instead'}`);
+          console.log(`Using cookies file: ${cookiesExist ? cookiesPath : 'Not found'}`);
           
           // Execute yt-dlp to download and merge the video
           console.log(`Executing yt-dlp with options: ${JSON.stringify(ytdlpDownloadOptions, null, 2)}`);
@@ -212,14 +210,12 @@ app.post("/api/download/merged", async (req, res) => {
               youtubeSkipDashManifest: false,
               referer: 'https://www.youtube.com/',
               cookies: cookiesExist ? cookiesPath : null,
-              cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
-              cookiesFromBrowserPath: cookiesExist ? null : '/opt/render/.config/google-chrome', // Specify the exact path for Chrome cookies
               addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
               // Adding verbose output for debugging
               verbose: true
             };
             
-            console.log(`Using cookies file in fallback: ${cookiesExist ? cookiesPath : 'Not found, using browser cookies instead'}`);
+            console.log(`Using cookies file in fallback: ${cookiesExist ? cookiesPath : 'Not found'}`);
             
             // Execute yt-dlp to download just the video
             console.log(`Executing fallback yt-dlp with options: ${JSON.stringify(fallbackOptions, null, 2)}`);
