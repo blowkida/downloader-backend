@@ -78,23 +78,28 @@ export default async function fetchVideoInfo(url) {
   // Use the error handling wrapper for all yt-dlp operations
   return await runYtDlpWithErrorHandling(async () => {
 
-  try {
-    // Check if cookies file exists - use absolute path resolution
-    const cookiesPath = path.resolve(process.cwd(), 'youtube-cookies.txt');
-    const cookiesExist = fs.existsSync(cookiesPath);
-    
-    if (cookiesExist) {
-      console.log(`Found cookies file at: ${cookiesPath}`);
-      // Log file permissions and size for debugging
-      try {
-        const stats = fs.statSync(cookiesPath);
-        console.log(`Cookies file size: ${stats.size} bytes, permissions: ${stats.mode.toString(8)}`);
-      } catch (err) {
-        console.error(`Error checking cookies file stats: ${err.message}`);
-      }
-    } else {
-      console.log(`Cookies file not found at: ${cookiesPath}`);
-    }
+// Modify the cookies path check in your code
+const cookiesPaths = [
+  path.resolve(process.cwd(), 'youtube-cookies.txt'),
+  '/opt/render/project/src/youtube-cookies.txt'
+];
+
+let cookiesPath = null;
+let cookiesExist = false;
+
+for (const testPath of cookiesPaths) {
+  if (fs.existsSync(testPath)) {
+    cookiesPath = testPath;
+    cookiesExist = true;
+    console.log(`Found cookies file at: ${cookiesPath}`);
+    break;
+  }
+}
+
+if (!cookiesExist) {
+  console.log('Cookies file not found at any known location');
+}
+
     
     // Get proxy URL from environment variables if available
     const proxyUrl = process.env.PROXY_URL || null;

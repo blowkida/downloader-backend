@@ -39,6 +39,15 @@ else
     fi
 fi
 
+# Create symbolic links to ensure cookies file is available in all potential locations
+echo "Creating symbolic links to cookies file in known Render.com paths..."
+# Symbolic link to Render's working directory
+if [ -d "/opt/render/project/src" ]; then
+    echo "Copying cookies file to /opt/render/project/src/"
+    cp ${COOKIES_FILE} /opt/render/project/src/
+    ls -la /opt/render/project/src/${COOKIES_FILE}
+fi
+
 # Print current directory contents for debugging
 echo "Current directory contents:"
 ls -la
