@@ -1,74 +1,20 @@
 #!/bin/bash
 set -e
 
-# This script installs yt-dlp for Render.com deployment
-# Modified to work without sudo privileges in Render.com environment
+echo "Setting up yt-dlp binary..."
 
-# Function to handle errors
-handle_error() {
-  echo "Error: $1"
-  exit 1
-}
-
-# Define installation directories
-# Use HOME directory which is always writable by the current user
+# Create a local bin directory
 BIN_DIR="$HOME/bin"
-USR_LOCAL_BIN="/usr/local/bin"
+mkdir -p "$BIN_DIR"
+chmod 755 "$BIN_DIR"
 
-# Create bin directory in home folder (always accessible)
-echo "Creating binary directory in $BIN_DIR..."
-if mkdir -p "$BIN_DIR"; then
-  echo "$BIN_DIR directory created or already exists"
-  chmod 755 "$BIN_DIR"
-else
-  handle_error "Failed to create $BIN_DIR directory"
-fi
+# Download the latest yt-dlp binary
+curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "$BIN_DIR/yt-dlp"
+chmod +x "$BIN_DIR/yt-dlp"
 
-# Download yt-dlp to user's bin directory
-echo "Downloading yt-dlp..."
-if curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "$BIN_DIR/yt-dlp"; then
-  chmod +x "$BIN_DIR/yt-dlp"
-  echo "yt-dlp downloaded successfully to $BIN_DIR"
-else
-  handle_error "yt-dlp download failed"
-fi
+# Ensure yt-dlp-exec can find it by copying it into the expected location
+mkdir -p ./node_modules/yt-dlp-exec/bin
+cp "$BIN_DIR/yt-dlp" ./node_modules/yt-dlp-exec/bin/yt-dlp
+chmod +x ./node_modules/yt-dlp-exec/bin/yt-dlp
 
-# Verify yt-dlp installation
-echo "Verifying yt-dlp installation..."
-if [ -f "$BIN_DIR/yt-dlp" ]; then
-  echo "yt-dlp found in $BIN_DIR"
-  "$BIN_DIR/yt-dlp" --version || echo "Warning: yt-dlp version check failed"
-else
-  handle_error "yt-dlp installation verification failed"
-fi
-
-# Create symbolic links for compatibility
-# First, always create a local symlink in the current directory
-echo "Creating local symlink in the current directory..."
-ln -sf "$BIN_DIR/yt-dlp" "./yt-dlp" || echo "Warning: Failed to create local symlink"
-
-# Then try to create a symlink in /usr/local/bin if possible
-echo "Attempting to create symbolic link in $USR_LOCAL_BIN (if possible)..."
-if [ -d "$USR_LOCAL_BIN" ] && [ -w "$USR_LOCAL_BIN" ]; then
-  echo "$USR_LOCAL_BIN is writable, creating symlink"
-  ln -sf "$BIN_DIR/yt-dlp" "$USR_LOCAL_BIN/yt-dlp" || echo "Warning: Failed to create symlink in $USR_LOCAL_BIN"
-else
-  echo "$USR_LOCAL_BIN is not writable, skipping symlink creation"
-fi
-
-# Create a symlink in node_modules/.bin directory for yt-dlp-exec to find
-echo "Creating symlink in node_modules/.bin directory..."
-mkdir -p "./node_modules/.bin"
-ln -sf "$BIN_DIR/yt-dlp" "./node_modules/.bin/yt-dlp" || echo "Warning: Failed to create symlink in node_modules/.bin"
-
-# Update yt-dlp to ensure we have the latest version
-echo "Updating yt-dlp to latest version..."
-"$BIN_DIR/yt-dlp" -U || echo "Warning: yt-dlp update failed, but continuing with current version"
-
-# Add bin directory to PATH for this session
-export PATH="$BIN_DIR:$PATH"
-echo "Added $BIN_DIR to PATH"
-
-echo "yt-dlp installation completed successfully!"
-echo "Location: $BIN_DIR/yt-dlp"
-echo "Version: $($BIN_DIR/yt-dlp --version)"
+echo "yt-dlp installed and linked for yt-dlp-exec"
