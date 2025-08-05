@@ -42,6 +42,12 @@ ln -sf "$BIN_DIR/yt-dlp" "./node_modules/.bin/yt-dlp"
 ln -sf "$BIN_DIR/yt-dlp" "./node_modules/yt-dlp-exec/bin/yt-dlp"
 ln -sf "$BIN_DIR/yt-dlp" "./yt-dlp"
 
+# Try to create a symlink in /usr/local/bin if possible (might require sudo)
+if [ -w "/usr/local/bin" ]; then
+  echo "📁 Creating symlink in /usr/local/bin..."
+  ln -sf "$BIN_DIR/yt-dlp" "/usr/local/bin/yt-dlp"
+fi
+
 # Verify installations
 echo "🔍 Verifying installations..."
 which yt-dlp || echo "⚠️ yt-dlp not found in PATH"

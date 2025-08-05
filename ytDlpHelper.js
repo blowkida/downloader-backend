@@ -1,8 +1,11 @@
 // ytDlpHelper.js
-import ytdlp from "yt-dlp-exec";
+import { create } from "yt-dlp-exec";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+
+// Create ytdlp instance with system binary path instead of node_modules path
+const ytdlp = create(process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
 // Create __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url);

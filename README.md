@@ -85,6 +85,16 @@ If you encounter issues with yt-dlp in production:
    - `./node_modules/.bin/yt-dlp` (symlink for yt-dlp-exec)
    - `/usr/local/bin/yt-dlp` (system-wide symlink, if writable)
 
+### ENOENT Error Fix
+
+If you encounter the error `spawn /opt/render/project/src/node_modules/yt-dlp-exec/bin/yt-dlp ENOENT`, it means the application is trying to use the yt-dlp binary from node_modules, but it doesn't exist at that path. This has been fixed by:
+
+1. Using the `create` function from yt-dlp-exec to specify the system-installed binary path
+2. Ensuring proper symlinks are created in multiple locations
+3. Setting the PATH environment variable to include all necessary directories
+
+The code now uses `create(process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp')` to create a yt-dlp instance that uses the system binary instead of looking in node_modules.
+
 ## API Endpoints
 
 - `POST /api/download`: Get video information

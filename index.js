@@ -1,11 +1,14 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import ytdlp from "yt-dlp-exec";
+import { create } from "yt-dlp-exec";
 import path from "path";
 import fs from "fs";
 import fetchVideoInfo from "./ytDlpHelper.js";
 import { cleanupTempFiles } from "./cleanup.js";
+
+// Create ytdlp instance with system binary path instead of node_modules path
+const ytdlp = create(process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
 // Load environment variables
 dotenv.config();
