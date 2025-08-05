@@ -175,6 +175,7 @@ app.post("/api/download/merged", async (req, res) => {
             referer: 'https://www.youtube.com/',
             cookies: cookiesExist ? cookiesPath : null,
             cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
+            cookiesFromBrowserPath: cookiesExist ? null : '/opt/render/.config/google-chrome', // Specify the exact path for Chrome cookies
             addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
             // Adding verbose output for debugging
             verbose: true
@@ -212,6 +213,7 @@ app.post("/api/download/merged", async (req, res) => {
               referer: 'https://www.youtube.com/',
               cookies: cookiesExist ? cookiesPath : null,
               cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
+              cookiesFromBrowserPath: cookiesExist ? null : '/opt/render/.config/google-chrome', // Specify the exact path for Chrome cookies
               addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
               // Adding verbose output for debugging
               verbose: true

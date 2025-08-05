@@ -119,6 +119,7 @@ export default async function fetchVideoInfo(url) {
       embedThumbnail: true,
       cookies: cookiesExist ? cookiesPath : null,
       cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
+      cookiesFromBrowserPath: cookiesExist ? null : '/opt/render/.config/google-chrome', // Specify the exact path for Chrome cookies
       addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
       // Removed proxy setting as it was causing connection timeouts
     };
@@ -181,7 +182,8 @@ export default async function fetchVideoInfo(url) {
         ...ytdlpOptions, 
         format: 'best',
         cookies: cookiesExist ? cookiesPath : null,
-        cookiesFromBrowser: cookiesExist ? null : 'chrome' // Try to use browser cookies if cookies file doesn't exist
+        cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
+        cookiesFromBrowserPath: cookiesExist ? null : '/opt/render/.config/google-chrome' // Specify the exact path for Chrome cookies
       };
       try {
         videoInfo = await ytdlp(url, fallbackOptions1);
@@ -199,6 +201,7 @@ export default async function fetchVideoInfo(url) {
           skipDownload: true,
           cookies: cookiesExist ? cookiesPath : null,
           cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
+          cookiesFromBrowserPath: cookiesExist ? null : '/opt/render/.config/google-chrome', // Specify the exact path for Chrome cookies
           addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
         };
         
@@ -637,6 +640,7 @@ export default async function fetchVideoInfo(url) {
           skipDownload: true,
           cookies: cookiesExist ? cookiesPath : null,
           cookiesFromBrowser: cookiesExist ? null : 'chrome', // Try to use browser cookies if cookies file doesn't exist
+          cookiesFromBrowserPath: cookiesExist ? null : '/opt/render/.config/google-chrome', // Specify the exact path for Chrome cookies
           addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
         };
         

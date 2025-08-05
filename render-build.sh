@@ -70,6 +70,14 @@ curl -Lb /tmp/gcookie "https://drive.google.com/uc?export=download&confirm=${CON
 
 echo "✅ youtube-cookies.txt downloaded successfully"
 
+# Create Chrome cookies directory structure for yt-dlp
+echo "📁 Creating Chrome cookies directory structure..."
+mkdir -p "/opt/render/.config/google-chrome/Default"
+touch "/opt/render/.config/google-chrome/Default/Cookies"
+chmod 755 "/opt/render/.config/google-chrome/Default"
+chmod 644 "/opt/render/.config/google-chrome/Default/Cookies"
+echo "✅ Chrome cookies directory structure created"
+
 # Check if youtube-cookies.txt exists, create a placeholder if it doesn't
 echo "🔍 Checking for youtube-cookies.txt..."
 if [ ! -f "./youtube-cookies.txt" ]; then
