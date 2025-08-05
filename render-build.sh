@@ -1,63 +1,56 @@
 #!/bin/bash
 set -e
 
-# Define binary directory
-BIN_DIR="/tmp/bin"
+# This script installs yt-dlp globally for Render.com deployment
 
 # Function to handle errors
 handle_error() {
   echo "Error: $1"
+  exit 1
 }
 
-# Create binary directory
-echo "Creating binary directory..."
-if mkdir -p "$BIN_DIR"; then
-  echo "$BIN_DIR directory created or already exists"
-  chmod 755 "$BIN_DIR"
+# Ensure we have sudo access for global installation
+echo "Setting up yt-dlp globally..."
+
+# Create directory if it doesn't exist
+echo "Creating directory structure..."
+sudo mkdir -p /usr/local/bin || handle_error "Failed to create /usr/local/bin directory"
+
+# Download yt-dlp to global location
+echo "Downloading yt-dlp..."
+if sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp; then
+  echo "yt-dlp downloaded successfully to /usr/local/bin"
 else
-  handle_error "Failed to create $BIN_DIR directory"
-  exit 1
+  handle_error "yt-dlp download failed"
 fi
 
-# Download yt-dlp
-echo "Downloading yt-dlp..."
-if curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "$BIN_DIR/yt-dlp"; then
-  chmod +x "$BIN_DIR/yt-dlp"
-  echo "yt-dlp downloaded successfully to $BIN_DIR"
+# Make yt-dlp executable
+echo "Making yt-dlp executable..."
+if sudo chmod a+rx /usr/local/bin/yt-dlp; then
+  echo "yt-dlp is now executable"
 else
-  handle_error "yt-dlp download to $BIN_DIR failed"
-
-  # Try downloading to current directory and then move
-  if curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ./yt-dlp; then
-    chmod +x ./yt-dlp
-    if mv ./yt-dlp "$BIN_DIR/"; then
-      echo "yt-dlp moved to $BIN_DIR"
-    else
-      handle_error "Failed to move yt-dlp to $BIN_DIR"
-      exit 1
-    fi
-  else
-    handle_error "All yt-dlp download attempts failed"
-    exit 1
-  fi
+  handle_error "Failed to make yt-dlp executable"
 fi
 
 # Verify yt-dlp installation
 echo "Verifying yt-dlp installation..."
-if [ -f "$BIN_DIR/yt-dlp" ]; then
-  echo "yt-dlp found in $BIN_DIR"
-  "$BIN_DIR/yt-dlp" --version || echo "Warning: yt-dlp version check failed"
+if [ -f "/usr/local/bin/yt-dlp" ]; then
+  echo "yt-dlp found in /usr/local/bin"
+  /usr/local/bin/yt-dlp --version || echo "Warning: yt-dlp version check failed"
 else
-  echo "Error: yt-dlp installation failed"
-  exit 1
+  handle_error "yt-dlp installation verification failed"
 fi
 
-# Add directory to PATH
-echo "Adding $BIN_DIR to PATH..."
-PATH_EXPORT="export PATH=\"$BIN_DIR:\$PATH\""
+# Create symlink in case the app looks for it in a different location
+echo "Creating symlinks for compatibility..."
+if [ ! -f "/usr/bin/yt-dlp" ]; then
+  sudo ln -sf /usr/local/bin/yt-dlp /usr/bin/yt-dlp || echo "Warning: Failed to create symlink in /usr/bin"
+fi
 
-# Export PATH for the current session
-export PATH="$BIN_DIR:$PATH"
-echo "PATH updated for current session: $PATH"
+# Update yt-dlp to ensure we have the latest version
+echo "Updating yt-dlp to latest version..."
+/usr/local/bin/yt-dlp -U || echo "Warning: yt-dlp update failed, but continuing with current version"
 
-echo "Build script completed successfully! yt-dlp is installed in $BIN_DIR"
+echo "yt-dlp installation completed successfully!"
+echo "Location: $(which yt-dlp)"
+echo "Version: $(/usr/local/bin/yt-dlp --version)"

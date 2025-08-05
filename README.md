@@ -6,7 +6,6 @@ This is the backend server for the YouTube Downloader application. It provides A
 ## Requirements
 - Node.js (v14 or higher)
 - yt-dlp (automatically installed in production)
-- FFmpeg (automatically installed in production)
 
 ## Development Setup
 
@@ -15,18 +14,16 @@ This is the backend server for the YouTube Downloader application. It provides A
    npm install
    ```
 
-2. For local development, you need to install yt-dlp and FFmpeg manually:
+2. For local development, you need to install yt-dlp manually:
    - **Windows**: 
      - Download yt-dlp from https://github.com/yt-dlp/yt-dlp/releases and place it in the server directory
-     - Download FFmpeg from https://ffmpeg.org/download.html and add it to your PATH
    - **macOS**: 
      ```
-     brew install yt-dlp ffmpeg
+     brew install yt-dlp
      ```
    - **Linux**: 
      ```
      sudo apt update
-     sudo apt install ffmpeg
      sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp
      sudo chmod a+rx /usr/local/bin/yt-dlp
      ```
@@ -38,19 +35,41 @@ This is the backend server for the YouTube Downloader application. It provides A
 
 ## Production Deployment (Render.com)
 
-The application is configured for deployment on Render.com. The `render-build.sh` script automatically downloads and sets up yt-dlp and FFmpeg during the build process.
+The application is configured for deployment on Render.com. The `render-build.sh` script automatically installs yt-dlp globally during the build process.
 
 ### Deployment Configuration
 
-The `render.yaml` file contains the configuration for deploying the application on Render.com. It sets up the necessary environment variables and build commands.
+The `render.yaml` file contains the configuration for deploying the application on Render.com:
+
+```yaml
+services:
+  - type: web
+    name: downloader-backend
+    env: node
+    buildCommand: |
+      chmod +x render-build.sh
+      ./render-build.sh
+      npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PATH
+        value: /usr/local/bin:/usr/bin:$PATH
+```
+
+### Build Script
+
+The `render-build.sh` script installs yt-dlp globally at `/usr/local/bin/yt-dlp` to ensure it's available to the application and persists across deployments.
 
 ## Troubleshooting
 
-If you encounter issues with yt-dlp or FFmpeg in production:
+If you encounter issues with yt-dlp in production:
 
-1. Check the logs to see if the binaries were downloaded and installed correctly
-2. Verify that the PATH environment variable includes `/tmp/bin`
+1. Check the logs to see if yt-dlp was downloaded and installed correctly
+2. Verify that the PATH environment variable includes `/usr/local/bin`
 3. Make sure the `render-build.sh` script executed successfully during the build process
+4. Check if yt-dlp is accessible at `/usr/local/bin/yt-dlp`
 
 ## API Endpoints
 
