@@ -36,3 +36,8 @@ Thumbs.db
 
 # Downloaded videos
 temp/*.mp4
+
+# YouTube cookies file (to prevent GitHub blocking)
+youtube-cookies.txt
+/youtube-cookies.txt
+/etc/secrets/youtube-cookies.txt

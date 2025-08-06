@@ -58,34 +58,6 @@ if (!fs.existsSync(tempDir)) {
 // Serve static files from the temp directory
 app.use('/temp', express.static(tempDir));
 
-// Helper function to find cookies file
-function findCookiesFile() {
-  // Check multiple possible locations for cookies file
-  const possibleCookiePaths = [
-    path.resolve('./youtube-cookies.txt'),                     // Current directory
-    path.resolve('/opt/render/project/src/youtube-cookies.txt'), // Render.com project directory
-    path.join(process.cwd(), 'youtube-cookies.txt'),           // Process working directory
-    '/youtube-cookies.txt',                                    // Root directory
-  ];
-
-  for (const cookiePath of possibleCookiePaths) {
-    if (fs.existsSync(cookiePath)) {
-      console.log(`Found cookies file at: ${cookiePath}`);
-      return cookiePath;
-    }
-  }
-
-  console.warn('No cookies file found in any of these locations:');
-  possibleCookiePaths.forEach(path => console.warn(` - ${path}`));
-  console.warn('Will continue without cookies - some videos might be unavailable');
-  
-  // Return default path even if not found for consistency
-  return possibleCookiePaths[0];
-}
-
-// Find cookies file once at startup
-const cookiesFilePath = findCookiesFile();
-
 // Helper function to handle errors
 function handleError(res, error) {
   console.error('Error:', error.message);
@@ -108,7 +80,7 @@ app.post("/api/download", async (req, res) => {
   try {
     console.log(`[${new Date().toISOString()}] Processing download request for URL: ${url}`);
     try {
-      const videoInfo = await fetchVideoInfo(url, cookiesFilePath);
+      const videoInfo = await fetchVideoInfo(url);
       console.log(`[${new Date().toISOString()}] Successfully extracted info for: ${videoInfo.title}`);
       res.json(videoInfo);
     } catch (ytdlpError) {
@@ -133,11 +105,6 @@ app.post("/api/download", async (req, res) => {
       } else if (ytdlpError.message.includes('timed out')) {
         statusCode = 504;
         errorCode = 'TIMEOUT';
-      } else if (ytdlpError.message.includes('cookies')) {
-        statusCode = 403;
-        errorCode = 'COOKIES_ERROR';
-        console.error(`Cookies issue detected: ${ytdlpError.message}`);
-        console.error(`Current cookies path: ${cookiesFilePath}, exists: ${fs.existsSync(cookiesFilePath)}`);
       }
       
       res.status(statusCode).json({
@@ -162,7 +129,7 @@ app.post("/api/download/merged", async (req, res) => {
   
   try {
     // Get video info to extract the direct download URL
-    const videoInfo = await fetchVideoInfo(url, cookiesFilePath);
+    const videoInfo = await fetchVideoInfo(url);
     
     // Find the format that matches the requested format ID
     const requestedFormat = videoInfo.qualityOptions.find(format => format.formatId === videoFormatId);
@@ -183,16 +150,9 @@ app.post("/api/download/merged", async (req, res) => {
         // Always attempt to merge video and audio
         try {
           console.log("Attempting to download and merge with best audio quality...");
-          // Check cookies file again before download (in case it was created/changed)
-          const cookiesPath = findCookiesFile();
-          const cookiesExist = fs.existsSync(cookiesPath);
-          
-          if (cookiesExist) {
-            console.log(`Using cookies file at: ${cookiesPath}`);
-          } else {
-            console.log(`Cookies file not found at: ${cookiesPath}, continuing without cookies`);
-          }
-          
+          // FIX: Modified the format string to ensure we get both video and audio
+          // The key change is using bestvideo+bestaudio format selector to ensure we get separate streams
+          // and then merge them with ffmpeg
           const ytdlpDownloadOptions = {
             format: `${videoFormatId}+bestaudio[ext=m4a]/best`, // Use specified videoFormatId + best audio
             mergeOutputFormat: 'mp4',
@@ -203,12 +163,10 @@ app.post("/api/download/merged", async (req, res) => {
             preferFreeFormats: true,
             youtubeSkipDashManifest: false,
             referer: 'https://www.youtube.com/',
-            cookies: cookiesPath,
             addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
+            // Adding verbose output for debugging
             verbose: true
           };
-          
-          console.log(`Download request initiated with cookies: ${cookiesPath} (File exists: ${cookiesExist})`);
           
           // Execute yt-dlp to download and merge the video
           console.log(`Executing yt-dlp with options: ${JSON.stringify(ytdlpDownloadOptions, null, 2)}`);
@@ -228,21 +186,20 @@ app.post("/api/download/merged", async (req, res) => {
             // Create fallback download options for best video format in MP4
             const fallbackOutputFilename = `./temp/${videoInfo.title.replace(/[/\:*?"<>|]/g, '_')}_${Date.now()}_fallback.mp4`;
             const fallbackOptions = {
+              // FIX: Include bestaudio in the fallback as well to make sure we get audio
               format: `bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best`,
               output: fallbackOutputFilename,
-              mergeOutputFormat: 'mp4',
+              mergeOutputFormat: 'mp4', // Ensure we're still trying to merge to mp4
               noWarnings: true,
               noCallHome: true,
               noCheckCertificate: true,
               preferFreeFormats: true,
               youtubeSkipDashManifest: false,
               referer: 'https://www.youtube.com/',
-              cookies: cookiesFilePath,
               addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
+              // Adding verbose output for debugging
               verbose: true
             };
-            
-            console.log(`Using cookies file path in fallback: ${cookiesFilePath}`);
             
             // Execute yt-dlp to download just the video
             console.log(`Executing fallback yt-dlp with options: ${JSON.stringify(fallbackOptions, null, 2)}`);
@@ -327,6 +284,4 @@ app.post("/api/download/merged", async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`Using cookies file: ${cookiesFilePath} (exists: ${fs.existsSync(cookiesFilePath)})`);
-  console.log(`yt-dlp binary path: ${ytdlpBinaryPath}`);
 });
