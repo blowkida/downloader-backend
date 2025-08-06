@@ -1,26 +1,10 @@
 import express from "express";
 import cors from "cors";
-import ytdlp from "yt-dlp-exec";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
 import multer from "multer";
-import fetchVideoInfo, { findValidCookiesFile, isValidCookiesFile } from "./ytDlpHelper.js";
-
-// Determine the best path for yt-dlp binary
-let ytdlpBinaryPath = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
-
-// Check if yt-dlp exists in the current directory (for local development)
-const localBinaryPath = path.join(process.cwd(), ytdlpBinaryPath);
-if (fs.existsSync(localBinaryPath)) {
-  console.log(`Using local yt-dlp binary at: ${localBinaryPath}`);
-  ytdlpBinaryPath = localBinaryPath;
-} else {
-  console.log(`Local yt-dlp binary not found at ${localBinaryPath}, using system path`);
-}
-
-// Create ytdlp instance with the determined binary path
-const ytdlp = create(ytdlpBinaryPath);
+import fetchVideoInfo, { findValidCookiesFile, isValidCookiesFile, ytdlp } from "./ytDlpHelper.js";
 
 // Load environment variables
 dotenv.config();

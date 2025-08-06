@@ -20,6 +20,9 @@ if (fs.existsSync(localBinaryPath)) {
 // This ensures we use the best available binary rather than expecting it in node_modules
 const ytdlp = create(ytdlpBinaryPath);
 
+// Export the ytdlp instance for use in other modules
+export { ytdlp };
+
 // Create __dirname equivalent for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
