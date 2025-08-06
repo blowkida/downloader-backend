@@ -159,10 +159,23 @@ export function findValidCookiesFile() {
 }
 
 // Helper function to handle yt-dlp errors with better messages
-async function runYtDlpWithErrorHandling(fn) {
+async function runYtDlpWithErrorHandling(fn, retryCount = 0) {
+  const MAX_RETRIES = 2; // Maximum number of retries
+  
   try {
     return await fn();
   } catch (error) {
+    // Check if this is a 403 error and we haven't exceeded max retries
+    if (retryCount < MAX_RETRIES && 
+        (error.message.includes("HTTP Error 403: Forbidden") || 
+         (error.stderr && error.stderr.includes("HTTP Error 403: Forbidden")))) {
+      console.log(`Encountered 403 Forbidden error. Retrying (${retryCount + 1}/${MAX_RETRIES})...`);
+      // Wait before retrying (exponential backoff)
+      const waitTime = 2000 * Math.pow(2, retryCount); // 2s, 4s, 8s, etc.
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      return runYtDlpWithErrorHandling(fn, retryCount + 1);
+    }
+    
     // Handle ENOENT error (binary not found)
     if (error.code === 'ENOENT') {
       console.error('ERROR: yt-dlp binary not found!');
@@ -218,7 +231,7 @@ export default async function fetchVideoInfo(url) {
       referer: 'https://www.youtube.com/',
       skipDownload: true,
       forceIpv4: true,
-      socketTimeout: 120, // Increased timeout for better reliability
+      socketTimeout: 120, // Socket timeout in seconds
       extractAudio: true,
       audioFormat: 'mp3',
       audioQuality: 0, // best quality
@@ -290,7 +303,7 @@ export default async function fetchVideoInfo(url) {
       
       // Add a timeout promise to handle potential hanging
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('yt-dlp operation timed out after 30 seconds')), 30000);
+        setTimeout(() => reject(new Error('yt-dlp operation timed out after 120 seconds')), 120000);
       });
       
       // Race the ytdlp operation against the timeout
@@ -305,7 +318,7 @@ export default async function fetchVideoInfo(url) {
         
         // Try with a simpler format string as fallback
       console.log('Trying fallback with simpler format string...');
-      const fallbackOptions1 = { ...ytdlpOptions, format: 'best' };
+      const fallbackOptions1 = { ...ytdlpOptions, format: 'best', socketTimeout: 120 };
       try {
         videoInfo = await ytdlp(url, fallbackOptions1);
         console.log('Fallback with simpler format string succeeded');
@@ -320,6 +333,7 @@ export default async function fetchVideoInfo(url) {
           noCheckCertificate: true,
           format: 'best',
           skipDownload: true,
+          socketTimeout: 120, // Socket timeout in seconds
           addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
         };
         
@@ -733,7 +747,16 @@ export default async function fetchVideoInfo(url) {
          console.log("No cookies file found. Authentication required.");
        }
     } else if (err.message.includes("timed out") || (err.stderr && err.stderr.includes("timed out"))) {
-      errorMessage = "The request timed out. YouTube might be blocking our requests or the server is overloaded.";
+      errorMessage = "The request timed out. YouTube might be blocking our requests or the server is overloaded. Try again later.";
+    } else if (err.message.includes("HTTP Error 403: Forbidden") || (err.stderr && err.stderr.includes("HTTP Error 403: Forbidden"))) {
+      // Check if we tried with valid cookies
+      if (cookiesExist && cookiesValid) {
+        errorMessage = "YouTube is blocking access (403 Forbidden). The cookies file might be expired or insufficient. Try uploading fresh cookies.";
+        console.log("403 Forbidden error despite using valid cookies file. Cookie file might be expired or insufficient.");
+      } else {
+        errorMessage = "YouTube is blocking access (403 Forbidden). Please upload a valid and fresh youtube-cookies.txt file.";
+        console.log("403 Forbidden error. No valid cookies file found.");
+      }
     } else if (err.stderr) {
       // Try to extract the most specific error message from stderr
       const errorPatterns = [

@@ -162,6 +162,7 @@ app.post("/api/download/merged", async (req, res) => {
             noCheckCertificate: true,
             preferFreeFormats: true,
             youtubeSkipDashManifest: false,
+            socketTimeout: 120, // Socket timeout in seconds
             referer: 'https://www.youtube.com/',
             addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
             // Adding verbose output for debugging
@@ -173,10 +174,36 @@ app.post("/api/download/merged", async (req, res) => {
             ytdlpDownloadOptions.cookies = cookiesPath;
           }
           
-          // Execute yt-dlp to download and merge the video
+          // Execute yt-dlp to download and merge the video with retry mechanism
           console.log(`Executing yt-dlp with options: ${JSON.stringify(ytdlpDownloadOptions, null, 2)}`);
-          await ytdlp(url, ytdlpDownloadOptions);
-          console.log('Video downloaded and merged to:', outputFilename);
+          
+          // Retry mechanism for 403 errors
+          const MAX_RETRIES = 2;
+          let retryCount = 0;
+          let downloadSuccess = false;
+          
+          while (!downloadSuccess && retryCount <= MAX_RETRIES) {
+            try {
+              await ytdlp(url, ytdlpDownloadOptions);
+              downloadSuccess = true;
+              console.log('Video downloaded and merged to:', outputFilename);
+            } catch (downloadError) {
+              if (downloadError.message.includes('HTTP Error 403: Forbidden') || 
+                  (downloadError.stderr && downloadError.stderr.includes('HTTP Error 403: Forbidden'))) {
+                retryCount++;
+                if (retryCount <= MAX_RETRIES) {
+                  console.log(`Download encountered 403 Forbidden error. Retrying (${retryCount}/${MAX_RETRIES})...`);
+                  // Wait before retrying (exponential backoff)
+                  const waitTime = 2000 * Math.pow(2, retryCount - 1); // 2s, 4s, 8s, etc.
+                  await new Promise(resolve => setTimeout(resolve, waitTime));
+                } else {
+                  throw downloadError; // Max retries exceeded, propagate the error
+                }
+              } else {
+                throw downloadError; // Not a 403 error, propagate it
+              }
+            }
+          }
           
           // Check if the file was created successfully
           if (!fs.existsSync(outputFilename)) {
@@ -200,6 +227,7 @@ app.post("/api/download/merged", async (req, res) => {
               noCheckCertificate: true,
               preferFreeFormats: true,
               youtubeSkipDashManifest: false,
+              socketTimeout: 120, // Socket timeout in seconds
               referer: 'https://www.youtube.com/',
               addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'],
               // Adding verbose output for debugging
@@ -212,10 +240,36 @@ app.post("/api/download/merged", async (req, res) => {
               console.log(`Using valid cookies file from ${cookiesPath} for fallback download`);
             }
             
-            // Execute yt-dlp to download just the video
+            // Execute yt-dlp to download just the video with retry mechanism
             console.log(`Executing fallback yt-dlp with options: ${JSON.stringify(fallbackOptions, null, 2)}`);
-            await ytdlp(url, fallbackOptions);
-            console.log('Video downloaded without merging to:', fallbackOutputFilename);
+            
+            // Retry mechanism for 403 errors
+            const MAX_RETRIES = 2;
+            let retryCount = 0;
+            let downloadSuccess = false;
+            
+            while (!downloadSuccess && retryCount <= MAX_RETRIES) {
+              try {
+                await ytdlp(url, fallbackOptions);
+                downloadSuccess = true;
+                console.log('Video downloaded without merging to:', fallbackOutputFilename);
+              } catch (downloadError) {
+                if (downloadError.message.includes('HTTP Error 403: Forbidden') || 
+                    (downloadError.stderr && downloadError.stderr.includes('HTTP Error 403: Forbidden'))) {
+                  retryCount++;
+                  if (retryCount <= MAX_RETRIES) {
+                    console.log(`Fallback download encountered 403 Forbidden error. Retrying (${retryCount}/${MAX_RETRIES})...`);
+                    // Wait before retrying (exponential backoff)
+                    const waitTime = 2000 * Math.pow(2, retryCount - 1); // 2s, 4s, 8s, etc.
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                  } else {
+                    throw downloadError; // Max retries exceeded, propagate the error
+                  }
+                } else {
+                  throw downloadError; // Not a 403 error, propagate it
+                }
+              }
+            }
             
             // Check if the fallback file was created successfully
             if (!fs.existsSync(fallbackOutputFilename)) {
