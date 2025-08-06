@@ -58,6 +58,13 @@ if (!fs.existsSync(tempDir)) {
 // Serve static files from the temp directory
 app.use('/temp', express.static(tempDir));
 
+// Add a health check endpoint
+app.get('/health', (req, res) => {
+  console.log('Health check requested from:', req.headers.origin);
+  console.log('Request headers:', req.headers);
+  res.json({ status: 'ok', message: 'Server is running', timestamp: new Date().toISOString() });
+});
+
 // Helper function to handle errors
 function handleError(res, error) {
   console.error('Error:', error.message);
@@ -278,6 +285,9 @@ app.post("/api/download/merged", async (req, res) => {
     }
   } catch (error) {
     console.error("Download error:", error);
+    console.error("Error stack:", error.stack);
+    console.error("Request headers:", req.headers);
+    console.error("Request origin:", req.headers.origin);
     res.status(500).json({ error: error.message || "Error preparing download." });
   }
 });
