@@ -38,7 +38,7 @@ function formatDuration(seconds) {
 }
 
 // Helper function to check if a cookies file is valid
-function isValidCookiesFile(filePath) {
+export function isValidCookiesFile(filePath) {
   try {
     if (!fs.existsSync(filePath)) {
       console.log(`Cookies file does not exist at: ${filePath}`);
@@ -91,6 +91,70 @@ function isValidCookiesFile(filePath) {
   }
 }
 
+// Helper function to find and validate a cookies file in multiple locations
+export function findValidCookiesFile() {
+  const result = {
+    cookiesExist: false,
+    cookiesValid: false,
+    cookiesPath: null,
+    checkedPaths: []
+  };
+  
+  // Check default location
+  const defaultPath = './youtube-cookies.txt';
+  result.checkedPaths.push(defaultPath);
+  
+  if (fs.existsSync(defaultPath)) {
+    result.cookiesExist = true;
+    result.cookiesValid = isValidCookiesFile(defaultPath);
+    result.cookiesPath = defaultPath;
+    
+    if (result.cookiesValid) {
+      console.log(`Found valid cookies file in default directory: ${defaultPath}`);
+      return result;
+    }
+  }
+  
+  // Check Render root location
+  const renderRootPath = '/youtube-cookies.txt';
+  result.checkedPaths.push(renderRootPath);
+  
+  if (fs.existsSync(renderRootPath)) {
+    result.cookiesExist = true;
+    result.cookiesValid = isValidCookiesFile(renderRootPath);
+    result.cookiesPath = renderRootPath;
+    
+    if (result.cookiesValid) {
+      console.log(`Found valid cookies file in Render root directory: ${renderRootPath}`);
+      return result;
+    }
+  }
+  
+  // Check secrets location
+  const secretsPath = '/etc/secrets/youtube-cookies.txt';
+  result.checkedPaths.push(secretsPath);
+  
+  if (fs.existsSync(secretsPath)) {
+    result.cookiesExist = true;
+    result.cookiesValid = isValidCookiesFile(secretsPath);
+    result.cookiesPath = secretsPath;
+    
+    if (result.cookiesValid) {
+      console.log(`Found valid cookies file in secrets directory: ${secretsPath}`);
+      return result;
+    }
+  }
+  
+  // Log the result
+  if (!result.cookiesExist) {
+    console.log(`No cookies file found. Checked paths: ${result.checkedPaths.join(', ')}`);
+  } else if (!result.cookiesValid) {
+    console.log(`Found cookies file at ${result.cookiesPath} but it is not valid.`);
+  }
+  
+  return result;
+}
+
 // Helper function to handle yt-dlp errors with better messages
 async function runYtDlpWithErrorHandling(fn) {
   try {
@@ -133,39 +197,9 @@ export default async function fetchVideoInfo(url) {
   return await runYtDlpWithErrorHandling(async () => {
 
   try {
-    // Check if cookies file exists in multiple possible locations
-     let cookiesPath = './youtube-cookies.txt';
-     let cookiesExist = false;
-     let cookiesValid = false;
-     
-     // Check default location
-     if (fs.existsSync(cookiesPath)) {
-       cookiesExist = true;
-       cookiesValid = isValidCookiesFile(cookiesPath);
-       console.log(`Found cookies file in default directory. Valid: ${cookiesValid}`);
-     }
-     
-     // If not found or not valid in the default location, check Render-specific locations
-     if (!cookiesExist || !cookiesValid) {
-       const renderRootPath = '/youtube-cookies.txt';
-       if (fs.existsSync(renderRootPath)) {
-         cookiesPath = renderRootPath;
-         cookiesExist = true;
-         cookiesValid = isValidCookiesFile(renderRootPath);
-         console.log(`Found cookies file in Render root directory. Valid: ${cookiesValid}`);
-       }
-     }
-     
-     // Check in /etc/secrets (common for Render and other platforms)
-     if (!cookiesExist || !cookiesValid) {
-       const secretsPath = '/etc/secrets/youtube-cookies.txt';
-       if (fs.existsSync(secretsPath)) {
-         cookiesPath = secretsPath;
-         cookiesExist = true;
-         cookiesValid = isValidCookiesFile(secretsPath);
-         console.log(`Found cookies file in /etc/secrets directory. Valid: ${cookiesValid}`);
-       }
-     }
+    // Find and validate cookies file
+     const cookiesResult = findValidCookiesFile();
+     const { cookiesExist, cookiesValid, cookiesPath } = cookiesResult;
     
     // Get proxy URL from environment variables if available
     const proxyUrl = process.env.PROXY_URL || null;
@@ -188,6 +222,7 @@ export default async function fetchVideoInfo(url) {
       format: 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best', // Added fallback to any best format
       mergeOutputFormat: 'mp4', // Ensure we merge to MP4 format
       embedThumbnail: true,
+      // Only use the cookies file, not browser cookies
       cookies: (cookiesExist && cookiesValid) ? cookiesPath : null,
       addHeader: ['User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36']
       // Removed proxy setting as it was causing connection timeouts
@@ -632,19 +667,20 @@ export default async function fetchVideoInfo(url) {
       if (innerError.message.includes("sign in") || 
           innerError.message.includes("login") || 
           innerError.message.includes("authentication") || 
-          innerError.message.includes("private")) {
+          innerError.message.includes("private") ||
+          innerError.message.includes("confirm you're not a bot")) {
         console.log("Authentication or private video error detected");
         
         // Check if we tried with valid cookies
          if (cookiesExist && cookiesValid) {
            console.log("Error occurred despite using valid cookies file. Cookie file might be expired or insufficient.");
-           throw new Error("This video requires authentication. The cookies file might be expired or insufficient for this video.");
+           throw new Error("This video requires authentication. Your cookies file was found and is valid, but might be expired or insufficient for this video. Please update your youtube-cookies.txt file.");
          } else if (cookiesExist && !cookiesValid) {
            console.log("Error occurred with invalid cookies file.");
-           throw new Error("This video requires authentication. The cookies file is invalid. Please upload a valid youtube-cookies.txt file.");
+           throw new Error("This video requires authentication. Your cookies file was found but is invalid. Please upload a valid youtube-cookies.txt file to one of these locations: ./youtube-cookies.txt, /youtube-cookies.txt, or /etc/secrets/youtube-cookies.txt");
          } else {
            console.log("No cookies file found. Authentication required.");
-           throw new Error("This video requires authentication. Please upload a valid youtube-cookies.txt file to /etc/secrets/ or the root directory.");
+           throw new Error("This video requires authentication. No cookies file was found. Please upload a valid youtube-cookies.txt file to one of these locations: ./youtube-cookies.txt, /youtube-cookies.txt, or /etc/secrets/youtube-cookies.txt");
          }
       }
       

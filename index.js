@@ -1,10 +1,11 @@
 import express from "express";
 import cors from "cors";
+import ytdlp from "yt-dlp-exec";
 import dotenv from "dotenv";
-import { create } from "yt-dlp-exec";
 import path from "path";
 import fs from "fs";
-import fetchVideoInfo from "./ytDlpHelper.js";
+import multer from "multer";
+import fetchVideoInfo, { findValidCookiesFile, isValidCookiesFile } from "./ytDlpHelper.js";
 
 // Determine the best path for yt-dlp binary
 let ytdlpBinaryPath = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp';
@@ -160,6 +161,14 @@ app.post("/api/download/merged", async (req, res) => {
           // FIX: Modified the format string to ensure we get both video and audio
           // The key change is using bestvideo+bestaudio format selector to ensure we get separate streams
           // and then merge them with ffmpeg
+          // Find and validate cookies file
+           const cookiesResult = findValidCookiesFile();
+           const { cookiesExist, cookiesValid, cookiesPath } = cookiesResult;
+           
+           if (cookiesExist && cookiesValid) {
+             console.log(`Using valid cookies file from ${cookiesPath} for download`);
+           }
+          
           const ytdlpDownloadOptions = {
             format: `${videoFormatId}+bestaudio[ext=m4a]/best`, // Use specified videoFormatId + best audio
             mergeOutputFormat: 'mp4',
@@ -174,6 +183,11 @@ app.post("/api/download/merged", async (req, res) => {
             // Adding verbose output for debugging
             verbose: true
           };
+          
+          // Add cookies if available
+          if (cookiesExist && cookiesValid) {
+            ytdlpDownloadOptions.cookies = cookiesPath;
+          }
           
           // Execute yt-dlp to download and merge the video
           console.log(`Executing yt-dlp with options: ${JSON.stringify(ytdlpDownloadOptions, null, 2)}`);
@@ -207,6 +221,12 @@ app.post("/api/download/merged", async (req, res) => {
               // Adding verbose output for debugging
               verbose: true
             };
+            
+            // Add cookies if available
+            if (cookiesExist && cookiesValid) {
+              fallbackOptions.cookies = cookiesPath;
+              console.log(`Using valid cookies file from ${cookiesPath} for fallback download`);
+            }
             
             // Execute yt-dlp to download just the video
             console.log(`Executing fallback yt-dlp with options: ${JSON.stringify(fallbackOptions, null, 2)}`);
@@ -289,6 +309,96 @@ app.post("/api/download/merged", async (req, res) => {
     console.error("Request headers:", req.headers);
     console.error("Request origin:", req.headers.origin);
     res.status(500).json({ error: error.message || "Error preparing download." });
+  }
+});
+
+// Set up multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, './'); // Store in the current directory
+  },
+  filename: function (req, file, cb) {
+    cb(null, 'youtube-cookies.txt'); // Always save as youtube-cookies.txt
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: function (req, file, cb) {
+    // Accept only text files
+    if (file.mimetype.startsWith('text/') || file.originalname.endsWith('.txt')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only text files are allowed'), false);
+    }
+  },
+  limits: {
+    fileSize: 1024 * 1024 // 1MB max file size
+  }
+});
+
+// Endpoint to check cookies status
+app.get("/api/cookies/status", (req, res) => {
+  try {
+    const cookiesResult = findValidCookiesFile();
+    const { cookiesExist, cookiesValid, cookiesPath, checkedPaths } = cookiesResult;
+    
+    res.json({
+      success: true,
+      cookiesExist,
+      cookiesValid,
+      cookiesPath: cookiesValid ? cookiesPath : null,
+      checkedPaths,
+      message: cookiesValid 
+        ? `Valid cookies file found at ${cookiesPath}` 
+        : (cookiesExist 
+            ? `Cookies file found at ${cookiesPath} but it is not valid` 
+            : `No cookies file found. Checked paths: ${checkedPaths.join(', ')}`)
+    });
+  } catch (error) {
+    console.error("Error checking cookies status:", error);
+    res.status(500).json({ error: error.message || "Error checking cookies status." });
+  }
+});
+
+// Endpoint to upload cookies file
+app.post("/api/cookies/upload", upload.single('cookiesFile'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "No file uploaded. Please upload a valid cookies file." 
+      });
+    }
+    
+    const filePath = req.file.path;
+    const isValid = isValidCookiesFile(filePath);
+    
+    if (!isValid) {
+      // If the file is not valid, delete it to avoid using an invalid file
+      try {
+        fs.unlinkSync(filePath);
+      } catch (deleteError) {
+        console.error("Error deleting invalid cookies file:", deleteError);
+      }
+      
+      return res.status(400).json({ 
+        success: false, 
+        message: "The uploaded file is not a valid Netscape HTTP Cookie File. Please make sure you're exporting cookies correctly." 
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: "Cookies file uploaded and validated successfully.",
+      filePath
+    });
+  } catch (error) {
+    console.error("Error uploading cookies file:", error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || "Error uploading cookies file." 
+    });
   }
 });
 
